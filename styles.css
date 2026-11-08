@@ -39,7 +39,7 @@ body {
 }
 
 .app {
-  max-width: 560px;
+  max-width: 940px;
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   display: flex;
@@ -90,7 +90,36 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .turn.w { background: #fff; }
 .turn.b { background: #222; }
 
-.board-wrap { width: 100%; }
+.play { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 760px) {
+  .play { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
+}
+.board-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; }
+.panel h2 { margin: 0; font-size: 1rem; }
+.count { color: var(--muted); font-size: 0.85rem; }
+.empty { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.moves {
+  list-style: none; margin: 0; padding: 0;
+  min-height: 2.2em; max-height: 260px; overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+.moves li { display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 4px; align-items: center; padding: 2px 0; }
+.moves .num { color: var(--muted); font-size: 0.9rem; }
+.mv { padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+.mv.skip { color: var(--muted); font-weight: 400; }
+.mv.cur { background: var(--last); }
+.mv.ok { background: rgba(63, 125, 88, 0.18); color: var(--accent); }
+.mv.ok::after { content: " ✓"; }
+.mv.no { background: rgba(185, 71, 61, 0.15); color: var(--bad); }
+.mv.no::after { content: " ✗"; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.help button { min-height: 38px; font-size: 0.9rem; color: var(--muted); }
 .board {
   position: relative;
   width: 100%;
@@ -133,7 +162,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 .piece {
   position: relative; z-index: 1;
-  font-size: min(10.5vw, 58px);
+  font-size: min(10.5vw, 70px);
   line-height: 1;
   font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", "Apple Symbols", serif;
   cursor: grab;
@@ -158,8 +187,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .status.good { color: var(--accent); }
 .status.bad { color: var(--bad); }
 
-.controls { display: grid; grid-template-columns: 52px 1fr 1fr 1fr 52px; gap: 8px; }
-.controls #prev, .controls #next { font-size: 1.5rem; padding: 0; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .summary {
   background: var(--surface); border: 1px solid var(--line);

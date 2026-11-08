@@ -28,18 +28,34 @@
       <div id="turn" class="turn" aria-hidden="true"></div>
     </section>
 
-    <div class="board-wrap">
-      <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
+    <div class="play">
+      <div class="board-col">
+        <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel" aria-label="Your line">
+        <div class="panel-head">
+          <h2>Moves</h2>
+          <span id="moves-count" class="count"></span>
+        </div>
+        <p id="moves-empty" class="empty">Play the moves for both sides on the board.</p>
+        <ol id="moves" class="moves"></ol>
+        <div class="row2">
+          <button id="undo" type="button">Undo</button>
+          <button id="clear" type="button">Clear</button>
+        </div>
+        <button id="submit" class="primary" type="button">Submit</button>
+        <div class="row2 help">
+          <button id="hint" type="button" class="ghost">Hint</button>
+          <button id="solution" type="button" class="ghost">Solution</button>
+        </div>
+      </aside>
     </div>
 
-    <p id="status" class="status" role="status" aria-live="polite"></p>
-
     <nav class="controls">
-      <button id="prev" type="button" aria-label="Previous puzzle">‹</button>
-      <button id="hint" type="button">Hint</button>
-      <button id="retry" type="button">Retry</button>
-      <button id="solution" type="button">Solution</button>
-      <button id="next" type="button" aria-label="Next puzzle">›</button>
+      <button id="prev" type="button">‹ Previous</button>
+      <button id="next" type="button">Next ›</button>
     </nav>
 
     <section id="summary" class="summary" hidden>

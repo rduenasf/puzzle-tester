@@ -2,7 +2,7 @@
 
 A small installable PWA with a chessboard and a random set of 10 checkmate puzzles, drawn from a pool of 22.
 
-- Tap or drag pieces. Any move that still forces mate in the remaining moves counts as correct; the opponent replies automatically.
+- Play the whole line on the board (your moves and the defence), shown in the move list, then hit **Submit**. Any of your moves that still forces mate counts as correct; each is marked ✓ or ✗.
 - Hint highlights the piece to move, then the target square. Solution plays it out.
 - Progress is saved in the browser; **New set** draws another 10.
 - Works offline after the first visit (service worker).

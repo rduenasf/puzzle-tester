@@ -51,7 +51,7 @@ const uci = (m) => m.from + m.to + (m.promotion || '');
 
 // ---------- state ----------
 let state = loadState() || newSet();
-let game, puzzle, player, onLine, busy, selected, hintLevel, mistakes, lastMove, usedHint = false;
+let game, puzzle, player, busy, selected, hints, verdict, mistakes, usedHelp;
 
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
@@ -77,139 +77,157 @@ function saveState() {
 }
 
 // ---------- puzzle flow ----------
+const maxPlies = () => puzzle.mate * 2 - 1;
+const plies = () => game.history().length;
+const solved = () => verdict && verdict.ok;
+
 function loadPuzzle(i) {
   state.index = i;
   saveState();
   puzzle = PUZZLES.find((p) => p.id === state.ids[i]);
   game = new Chess(puzzle.fen);
   player = game.turn();
-  onLine = true;
   busy = false;
   selected = null;
-  hintLevel = 0;
+  hints = [];
+  verdict = null;
   mistakes = 0;
-  usedHint = false;
-  lastMove = null;
+  usedHelp = false;
   $('title').textContent = `${i + 1}. ${puzzle.title}`;
-  $('subtitle').textContent = `${player === 'w' ? 'White' : 'Black'} to move · mate in ${puzzle.mate}`;
+  $('subtitle').textContent = `${side(player)} to move · mate in ${puzzle.mate}`;
   $('turn').className = `turn ${player}`;
-  setStatus(state.results[i] ? 'Already solved — play it again or move on.' : 'Find the best move.');
+  setStatus(state.results[i]
+    ? 'Already done — play it again or move on.'
+    : `Enter the full line (both sides, ${maxPlies()} move${maxPlies() > 1 ? 's' : ''}), then Submit.`);
   $('summary').hidden = true;
   render();
 }
 
-function movesPlayed() { return game.history({ verbose: true }).length; }
-function movesLeft() { return puzzle.mate - Math.floor(movesPlayed() / 2); }
+const side = (c) => (c === 'w' ? 'White' : 'Black');
 
-function expectedMove() {
-  // Next player move: from the stored line if we're still on it, else from the solver.
-  if (onLine) return puzzle.line[movesPlayed()];
-  const s = shortestMate(game, movesLeft());
-  return s ? uci(s.move) : null;
-}
-
-function tryPlayerMove(from, to) {
-  if (busy || game.turn() !== player || isDone()) return false;
+function enterMove(from, to) {
+  if (busy || solved() || plies() >= maxPlies()) return false;
   const legal = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
   if (!legal.length) return false;
-
-  // Promotion: use the line's piece if it matches, otherwise a queen.
-  const want = expectedMove();
-  let promo;
+  let promotion;
   if (legal[0].promotion) {
-    promo = want && want.slice(0, 4) === from + to && want[4] ? want[4] : 'q';
+    const want = puzzle.line[plies()];
+    promotion = want && want.slice(0, 4) === from + to && want[4] ? want[4] : 'q';
   }
-  const m = game.move({ from, to, promotion: promo });
+  game.move({ from, to, promotion });
   selected = null;
-
-  const remaining = puzzle.mate - Math.floor((movesPlayed() - 1) / 2) - 1;
-  const correct = game.isCheckmate() || (remaining > 0 && !game.isGameOver() && allRepliesLose(game, remaining));
-
-  if (!correct) {
-    mistakes++;
-    lastMove = m;
-    render();
-    setStatus('Not the move — try again.', 'bad');
-    boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake');
-    busy = true;
-    setTimeout(() => { game.undo(); lastMove = prevMove(); busy = false; render(); }, 650);
-    return true;
-  }
-
-  if (onLine && uci(m) !== puzzle.line[movesPlayed() - 1]) onLine = false;
-  lastMove = m;
-  hintLevel = 0;
-
-  if (game.isCheckmate()) { finish(); return true; }
-
-  setStatus('Good move! Keep going…', 'good');
+  hints = [];
+  verdict = null; // editing the line clears an old verdict
+  if (plies() >= maxPlies() || game.isGameOver()) setStatus('Line complete — hit Submit.');
+  else setStatus(`${side(game.turn())} to play.`);
   render();
-  busy = true;
-  setTimeout(() => {
-    const idx = movesPlayed();
-    let reply = onLine ? puzzle.line[idx] : null;
-    let r = reply ? game.move(reply) : null;
-    if (!r) { onLine = false; r = game.move(stubbornReply(game, remaining)); }
-    lastMove = r;
-    busy = false;
-    setStatus('Your move.');
-    render();
-  }, 450);
   return true;
 }
 
-function prevMove() {
-  const h = game.history({ verbose: true });
-  return h[h.length - 1] || null;
+// Judge the entered line. Each of the solver's moves must keep a forced mate
+// within the moves remaining; the defender's moves are free choices.
+function evaluate(moves) {
+  const g = new Chess(puzzle.fen);
+  const marks = [];
+  let ok = true, failAt = -1;
+  moves.forEach((m, i) => {
+    g.move(m);
+    if (i % 2 === 1) { marks.push(null); return; }
+    const remaining = puzzle.mate - (i / 2 + 1);
+    const good = g.isCheckmate() || (remaining > 0 && !g.isGameOver() && allRepliesLose(g, remaining));
+    marks.push(good);
+    if (!good && ok) { ok = false; failAt = i; }
+  });
+  const mated = g.isCheckmate();
+  return { ok: ok && mated, incomplete: ok && !mated, failAt, marks };
 }
 
-function isDone() { return game.isCheckmate(); }
-
-function finish() {
+function submit() {
+  if (busy || solved()) return;
+  const moves = game.history({ verbose: true });
+  if (!moves.length) { setStatus('Make a move first.', 'bad'); return; }
+  verdict = evaluate(moves);
   const i = state.index;
-  if (!state.results[i]) {
-    state.results[i] = hintLevel === 'revealed' ? 'revealed' : (mistakes || usedHint ? 'helped' : 'clean');
+  if (verdict.ok) {
+    if (!state.results[i]) state.results[i] = mistakes || usedHelp ? 'helped' : 'clean';
+    saveState();
+    setStatus(state.results[i] === 'clean' ? 'Correct — checkmate! Solved cleanly.' : 'Correct — checkmate!', 'good');
+    if (state.results.every(Boolean)) showSummary();
+  } else if (verdict.incomplete) {
+    setStatus('So far so good, but it isn\'t mate yet — keep going.', 'bad');
+  } else {
+    mistakes++;
+    const n = Math.floor(verdict.failAt / 2) + 1;
+    setStatus(`Not quite — your move ${n} doesn't force mate. Undo and try again.`, 'bad');
+    shake();
   }
-  usedHint = false;
-  saveState();
-  const msg = { clean: 'Checkmate! Solved cleanly.', helped: 'Checkmate! Solved with help.', revealed: 'Checkmate — solution shown.' }[state.results[i]];
-  setStatus(msg, state.results[i] === 'revealed' ? 'bad' : 'good');
   render();
-  if (state.results.every(Boolean)) showSummary();
 }
 
+function undo() {
+  if (busy || solved() || !plies()) return;
+  game.undo();
+  selected = null; hints = []; verdict = null;
+  setStatus(`${side(game.turn())} to play.`);
+  render();
+}
+function clearLine() {
+  if (busy || solved()) return;
+  while (game.undo());
+  selected = null; hints = []; verdict = null;
+  setStatus('Line cleared.');
+  render();
+}
+
+// Is the current entered line still on track (every solver move so far good)?
+function lineOnTrack() {
+  const v = evaluate(game.history({ verbose: true }));
+  return v.failAt === -1;
+}
 
 function hint() {
-  if (busy || isDone() || game.turn() !== player) return;
-  const mv = expectedMove();
-  if (!mv) return;
-  usedHint = true;
-  if (hintLevel === 0) {
-    hintLevel = 1;
-    render([mv.slice(0, 2)]);
-    setStatus('Hint: move the highlighted piece.');
+  if (busy || solved()) return;
+  if (!lineOnTrack()) { setStatus('An earlier move doesn\'t work — undo back to it.', 'bad'); return; }
+  if (plies() >= maxPlies()) return;
+  usedHelp = true;
+  const remaining = puzzle.mate - Math.floor(plies() / 2);
+  let mv;
+  if (game.turn() === player) {
+    mv = plies() === 0 ? puzzle.line[0] : uci(shortestMate(game, remaining).move);
+    hints = hints.length ? [mv.slice(0, 2), mv.slice(2, 4)] : [mv.slice(0, 2)];
+    setStatus(hints.length === 1 ? 'Hint: move the highlighted piece.' : 'Hint: from → to is highlighted.');
   } else {
-    hintLevel = 2;
-    render([mv.slice(0, 2), mv.slice(2, 4)]);
-    setStatus('Hint: from → to is highlighted.');
+    mv = uci(stubbornReply(game, remaining));
+    hints = [mv.slice(0, 2), mv.slice(2, 4)];
+    setStatus(`Hint: ${side(game.turn())}'s toughest defence is highlighted.`);
   }
+  render();
 }
 
 function showSolution() {
-  if (busy || isDone()) return;
-  if (!state.results[state.index]) state.results[state.index] = 'revealed';
+  if (busy || solved()) return;
+  const i = state.index;
+  if (!state.results[i]) state.results[i] = 'revealed';
   saveState();
-  hintLevel = 'revealed';
+  while (game.undo());
+  busy = true; selected = null; hints = []; verdict = null;
+  let k = 0;
   const step = () => {
-    if (isDone()) { finish(); return; }
-    const mv = game.turn() === player ? expectedMove() : (onLine ? puzzle.line[movesPlayed()] : uci(stubbornReply(game, movesLeft())));
-    const r = game.move({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] });
-    lastMove = r;
-    render();
-    setTimeout(step, 650);
+    if (k < puzzle.line.length) {
+      const mv = puzzle.line[k++];
+      game.move({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] });
+      render();
+      setTimeout(step, 600);
+    } else {
+      busy = false;
+      verdict = evaluate(game.history({ verbose: true }));
+      setStatus('Solution shown.', 'bad');
+      render();
+      if (state.results.every(Boolean)) showSummary();
+    }
   };
-  busy = true;
-  setTimeout(() => { busy = false; step(); }, 0);
+  render();
+  setTimeout(step, 250);
 }
 
 function showSummary() {
@@ -219,6 +237,10 @@ function showSummary() {
   const revealed = r.filter((x) => x === 'revealed').length;
   $('summary-text').textContent = `${clean} clean · ${helped} with help · ${revealed} revealed — out of ${SET_SIZE}.`;
   $('summary').hidden = false;
+}
+
+function shake() {
+  boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake');
 }
 
 // ---------- rendering ----------
@@ -238,9 +260,11 @@ function squareOrder() {
   return sq;
 }
 
-function render(hints = []) {
+function render() {
   const targets = selected ? game.moves({ square: selected, verbose: true }) : [];
   const checkSq = game.inCheck() ? findKing(game.turn()) : null;
+  const hist = game.history({ verbose: true });
+  const last = hist[hist.length - 1];
   boardEl.textContent = '';
   squareOrder().forEach((s, i) => {
     const el = document.createElement('div');
@@ -248,7 +272,7 @@ function render(hints = []) {
     el.className = `sq ${(f + r) % 2 ? 'dark' : 'light'}`;
     el.dataset.square = s;
     el.setAttribute('role', 'gridcell');
-    if (lastMove && (lastMove.from === s || lastMove.to === s)) el.classList.add('last');
+    if (last && (last.from === s || last.to === s)) el.classList.add('last');
     if (selected === s) el.classList.add('sel');
     if (hints.includes(s)) el.classList.add('hint');
     if (checkSq === s) el.classList.add('check');
@@ -269,11 +293,51 @@ function render(hints = []) {
     if (i >= 56) el.appendChild(coord('file', s[0]));
     boardEl.appendChild(el);
   });
+  renderMoves(hist);
   renderProgress();
+  const locked = busy || solved();
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === SET_SIZE - 1;
-  $('hint').disabled = isDone();
-  $('solution').disabled = isDone();
+  $('hint').disabled = locked || plies() >= maxPlies();
+  $('solution').disabled = locked;
+  $('undo').disabled = locked || !plies();
+  $('clear').disabled = locked || !plies();
+  $('submit').disabled = locked || !plies();
+}
+
+function renderMoves(hist) {
+  const ol = $('moves');
+  ol.textContent = '';
+  const fen = puzzle.fen.split(' ');
+  let num = +fen[5] || 1;
+  let row = null;
+  hist.forEach((m, i) => {
+    const white = m.color === 'w';
+    if (white || !row) {
+      row = document.createElement('li');
+      const n = document.createElement('span');
+      n.className = 'num';
+      n.textContent = `${num}.`;
+      row.appendChild(n);
+      if (!white) row.appendChild(cell('…', 'skip'));
+      ol.appendChild(row);
+    }
+    const c = cell(m.san, i === hist.length - 1 ? 'cur' : '');
+    const mark = verdict ? verdict.marks[i] : null;
+    if (mark === true) c.classList.add('ok');
+    if (mark === false) c.classList.add('no');
+    row.appendChild(c);
+    if (!white) { num++; row = null; }
+  });
+  const left = maxPlies() - hist.length;
+  $('moves-count').textContent = solved() ? '' : left > 0 ? `${left} to go` : 'ready';
+  $('moves-empty').hidden = hist.length > 0;
+}
+function cell(text, cls) {
+  const s = document.createElement('span');
+  s.className = `mv ${cls}`.trim();
+  s.textContent = text;
+  return s;
 }
 
 function coord(kind, text) {
@@ -296,9 +360,9 @@ function renderProgress() {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = i + 1;
-    b.className = [state.results[i] || '', i === state.index ? 'current' : ''].join(' ');
+    b.className = [state.results[i] || '', i === state.index ? 'current' : ''].join(' ').trim();
     b.setAttribute('aria-label', `Puzzle ${i + 1}${state.results[i] ? `, ${state.results[i]}` : ''}`);
-    b.addEventListener('click', () => loadPuzzle(i));
+    b.addEventListener('click', () => !busy && loadPuzzle(i));
     li.appendChild(b);
     ol.appendChild(li);
   });
@@ -312,21 +376,20 @@ function squareAt(x, y) {
   const sq = el && el.closest('.sq');
   return sq && boardEl.contains(sq) ? sq.dataset.square : null;
 }
-function ownPiece(s) {
+function movable(s) {
   const p = s && game.get(s);
-  return p && p.color === player && game.turn() === player;
+  return p && p.color === game.turn() && !busy && !solved() && plies() < maxPlies();
 }
 
 boardEl.addEventListener('pointerdown', (e) => {
-  if (busy || isDone()) return;
   const s = squareAt(e.clientX, e.clientY);
   if (!s) return;
 
-  if (selected && selected !== s && !ownPiece(s)) {
-    if (!tryPlayerMove(selected, s)) { selected = null; render(); }
+  if (selected && selected !== s && !movable(s)) {
+    if (!enterMove(selected, s)) { selected = null; render(); }
     return;
   }
-  if (!ownPiece(s)) { selected = null; render(); return; }
+  if (!movable(s)) { if (selected) { selected = null; render(); } return; }
 
   const wasSelected = selected === s;
   selected = s;
@@ -361,7 +424,7 @@ function endDrag(e, cancel) {
   if (cancel) { render(); return; }
   if (d.moved) {
     const to = squareAt(e.clientX, e.clientY);
-    if (!to || to === d.from || !tryPlayerMove(d.from, to)) render();
+    if (!to || to === d.from || !enterMove(d.from, to)) render();
   } else if (d.wasSelected) {
     selected = null;
     render();
@@ -371,18 +434,23 @@ boardEl.addEventListener('pointerup', (e) => endDrag(e, false));
 boardEl.addEventListener('pointercancel', (e) => endDrag(e, true));
 
 // ---------- buttons ----------
-$('prev').addEventListener('click', () => state.index > 0 && loadPuzzle(state.index - 1));
-$('next').addEventListener('click', () => state.index < SET_SIZE - 1 && loadPuzzle(state.index + 1));
-$('retry').addEventListener('click', () => { if (!busy) loadPuzzle(state.index); });
+$('prev').addEventListener('click', () => !busy && state.index > 0 && loadPuzzle(state.index - 1));
+$('next').addEventListener('click', () => !busy && state.index < SET_SIZE - 1 && loadPuzzle(state.index + 1));
+$('undo').addEventListener('click', undo);
+$('clear').addEventListener('click', clearLine);
+$('submit').addEventListener('click', submit);
 $('hint').addEventListener('click', hint);
 $('solution').addEventListener('click', showSolution);
-const startNewSet = () => { state = newSet(); saveState(); loadPuzzle(0); };
+const startNewSet = () => { if (busy) return; state = newSet(); saveState(); loadPuzzle(0); };
 $('new-set').addEventListener('click', startNewSet);
 $('summary-new').addEventListener('click', startNewSet);
 
 document.addEventListener('keydown', (e) => {
+  if (e.target.closest('button')) return;
   if (e.key === 'ArrowLeft') $('prev').click();
   if (e.key === 'ArrowRight') $('next').click();
+  if (e.key === 'Backspace') undo();
+  if (e.key === 'Enter') submit();
 });
 
 loadPuzzle(state.index || 0);
