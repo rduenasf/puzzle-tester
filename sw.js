@@ -1,5 +1,5 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v5';
+const VERSION = 'v13';
 const CACHE = `mate-drills-${VERSION}`;
 const ASSETS = [
   './',
@@ -7,6 +7,8 @@ const ASSETS = [
   './styles.css',
   './app.js',
   './puzzles.js',
+  './strategic.js',
+  './strategic_review.js',
   './vendor/chess.js',
   './vendor/chessground.min.js',
   './vendor/chessground.base.css',

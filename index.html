@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mate Drills</title>
-  <meta name="description" content="Ten random checkmate puzzles. Works offline.">
+  <meta name="description" content="Checkmate and strategy puzzles. Works offline.">
   <meta name="theme-color" content="#2b2622">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -17,11 +17,35 @@
 <body>
   <main class="app">
     <header class="top">
-      <h1>Mate Drills</h1>
-      <button id="new-set" class="ghost" type="button">New set</button>
+      <h1 id="app-title">Mate Drills</h1>
+      <div class="top-actions">
+        <div class="modes" role="group" aria-label="Puzzle type">
+          <button id="mode-mate" type="button" aria-pressed="true">Mate</button>
+          <button id="mode-strategy" type="button" aria-pressed="false">Strategy</button>
+          <button id="mode-review" type="button" aria-pressed="false" title="All problems from the current miner settings, with the checks each one passed">Review</button>
+        </div>
+        <button id="new-set" class="ghost" type="button">New set</button>
+      </div>
     </header>
 
     <ol id="progress" class="progress" aria-label="Puzzle progress"></ol>
+
+    <details id="browser" class="browser" open hidden>
+      <summary id="browser-summary">Problems</summary>
+      <div class="filters">
+        <label>Category <select id="f-cat"></select></label>
+        <label>Verdict <select id="f-nature"></select></label>
+        <label>What changed <select id="f-changed"></select></label>
+        <label>Time <select id="f-tc"></select></label>
+        <label>Status <select id="f-status"></select></label>
+        <form id="f-go" class="go">
+          <label>Go to # <input id="f-num" type="number" min="1" inputmode="numeric"></label>
+          <button type="submit">Go</button>
+        </form>
+        <button id="f-reset" type="button" class="ghost">Reset filters</button>
+      </div>
+      <ol id="browser-list" class="browser-list" aria-label="Problems"></ol>
+    </details>
 
     <section class="info">
       <div>
@@ -35,6 +59,7 @@
       <div class="board-col">
         <div class="board-frame"><div id="board" class="board" aria-label="Chessboard"></div></div>
         <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p id="detail" class="detail" hidden></p>
       </div>
 
       <aside class="panel" aria-label="Your line">
@@ -53,6 +78,21 @@
           <button id="hint" type="button" class="ghost">Hint</button>
           <button id="solution" type="button" class="ghost">Solution</button>
         </div>
+        <details id="why" class="why" open hidden>
+          <summary>Why this problem</summary>
+          <ul id="why-list"></ul>
+          <p id="why-note" class="why-note"></p>
+        </details>
+        <details id="wrong" class="why" open hidden>
+          <summary>What went wrong</summary>
+          <p id="wrong-text" class="wrong-text"></p>
+          <div id="wrong-chart" class="wrong-chart"></div>
+          <div class="row2">
+            <button id="show-punish" type="button">Show punishment</button>
+            <button id="show-best" type="button">Show best line</button>
+          </div>
+          <p id="wrong-note" class="why-note"></p>
+        </details>
       </aside>
     </div>
 

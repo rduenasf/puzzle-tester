@@ -7,6 +7,10 @@ A small installable PWA with a chessboard and a random set of 10 checkmate puzzl
 - Progress is saved in the browser; **New set** draws another 10.
 - Works offline after the first visit (service worker).
 
+## Strategy mode
+
+The **Strategy** toggle switches to quiet positional problems mined from my own games by the tool in [`miner/`](miner/) (Stockfish + Maia-3). **Review** lists every mined problem with filters and an explanation of each one. You play one move; it is graded from Stockfish's precomputed scores for every legal move (Best ≤10cp, Good ≤30cp count as solved). After solving or revealing, the page shows the move from the original game and links to it. `strategic.js` and `strategic_review.js` are generated data; don't edit them by hand. Game downloads and mining outputs (PGN, CSV, the engine cache) stay in `miner/work/`, which is git-ignored. The criteria and their reasoning are in [MINING-DECISIONS.md](MINING-DECISIONS.md).
+
 ## Run locally
 
 ```bash

@@ -38,6 +38,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+[hidden] { display: none !important; } /* class display rules must not override `hidden` */
+
 .app {
   max-width: 940px;
   margin: 0 auto;
@@ -47,7 +49,36 @@ body {
   gap: 12px;
 }
 
-.top { display: flex; align-items: center; justify-content: space-between; }
+/* Wide screens in Review: problem list in a full-height column left of everything else. */
+@media (min-width: 1200px) {
+  .app.browsing {
+    max-width: 1340px;
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) minmax(0, 940px);
+    grid-template-rows: auto auto auto auto 1fr; /* header, info, board, controls, footer */
+    column-gap: 24px;
+    row-gap: 12px;
+    align-items: start;
+    justify-content: center;
+  }
+  .app.browsing > * { grid-column: 2; }
+  .app.browsing > .browser {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: 12px;
+  }
+  .app.browsing .browser-list { max-height: calc(100vh - 330px); }
+  .app.browsing .browser-list .meta { white-space: normal; }
+  .app.browsing .filters label { flex: 1 1 140px; }
+  .app.browsing .filters select { width: 100%; }
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.top-actions { display: flex; align-items: center; gap: 8px; }
+.modes { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.modes button { border: 0; border-radius: 0; padding: 8px 12px; min-height: 40px; background: transparent; }
+.modes button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
 h1 { font-size: 1.35rem; margin: 0; letter-spacing: 0.01em; }
 
 button {
@@ -144,6 +175,55 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .status { min-height: 1.4em; margin: 0; text-align: center; font-weight: 550; }
 .status.good { color: var(--accent); }
 .status.bad { color: var(--bad); }
+.detail { margin: 0; text-align: center; color: var(--muted); font-size: 0.9rem; }
+.detail a { color: inherit; }
+.browser {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 12px; font-size: 0.88rem;
+}
+.browser summary { cursor: pointer; font-weight: 550; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin: 8px 0; }
+.filters label { display: grid; gap: 2px; color: var(--muted); font-size: 0.78rem; }
+.filters select, .filters input {
+  font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 34px;
+}
+.filters input { width: 5.5em; }
+.filters .go { display: flex; gap: 6px; align-items: end; }
+.filters button { min-height: 34px; padding: 6px 10px; font-size: 0.85rem; }
+.browser-list {
+  list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+.browser-list button {
+  width: 100%; min-height: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  display: grid; grid-template-columns: 3.8em 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 4px; text-align: left; font-size: 0.85rem; background: transparent;
+}
+.browser-list button.current { background: var(--sel); }
+.browser-list .n { font-weight: 600; font-variant-numeric: tabular-nums; }
+.browser-list .meta { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-list .st { font-size: 0.8rem; }
+.browser-list .clean .st { color: var(--accent); }
+.browser-list .helped .st { color: var(--warn); }
+.browser-list .revealed .st { color: var(--bad); }
+.why {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 12px; font-size: 0.88rem;
+}
+.why summary { cursor: pointer; font-weight: 550; }
+.why ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.why li { display: grid; grid-template-columns: 1.2em 1fr; gap: 6px; }
+.why li .ok { color: var(--accent); }
+.why li .na { color: var(--muted); }
+.why li small { color: var(--muted); }
+.why-note { margin: 8px 0 0; color: var(--muted); font-size: 0.8rem; }
+.wrong-text { margin: 8px 0; }
+.wrong-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.wrong-chart .pt { cursor: pointer; }
+.wrong-chart .pt:hover { stroke: var(--text); stroke-width: 2; }
+.why .row2 { margin-top: 8px; }
+.why .row2 button { min-height: 36px; padding: 6px 8px; font-size: 0.85rem; }
 
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
