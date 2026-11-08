@@ -1,10 +1,9 @@
 import { Chess } from './vendor/chess.js';
+import { Chessground } from './vendor/chessground.min.js';
 import { PUZZLES } from './puzzles.js';
 
 const SET_SIZE = 10;
 const STORE_KEY = 'mate-drills-v1';
-const pieceSrc = (p) => `pieces/cburnett/${p.color}${p.type.toUpperCase()}.svg`;
-const FILES = 'abcdefgh';
 
 const $ = (id) => document.getElementById(id);
 const boardEl = $('board');
@@ -50,7 +49,7 @@ const uci = (m) => m.from + m.to + (m.promotion || '');
 
 // ---------- state ----------
 let state = loadState() || newSet();
-let game, puzzle, player, busy, selected, hints, verdict, mistakes, usedHelp;
+let game, puzzle, player, busy, hints, verdict, mistakes, usedHelp, shownFen;
 
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
@@ -90,10 +89,11 @@ function loadPuzzle(i) {
   game = new Chess(puzzle.fen);
   player = game.turn();
   busy = false;
-  selected = null;
   hints = [];
   verdict = null;
   mistakes = 0;
+  shownFen = null;
+  cg.setShapes([]);
   usedHelp = false;
   $('title').textContent = `Puzzle ${i + 1}`;
   $('subtitle').textContent = `${side(player)} to move`;
@@ -102,7 +102,10 @@ function loadPuzzle(i) {
     ? 'Already done — play it again or move on.'
     : 'Find the best line. Play both sides, then Submit.');
   $('summary').hidden = true;
+  // Snap to the new puzzle instead of animating from the previous position.
+  cg.set({ animation: { enabled: false } });
   render();
+  cg.set({ animation: { enabled: true } });
 }
 
 const side = (c) => (c === 'w' ? 'White' : 'Black');
@@ -117,7 +120,6 @@ function enterMove(from, to) {
     promotion = want && want.slice(0, 4) === from + to && want[4] ? want[4] : 'q';
   }
   game.move({ from, to, promotion });
-  selected = null;
   hints = [];
   verdict = null; // editing the line clears an old verdict
   if (plies() >= maxPlies() || game.isGameOver()) setStatus('Ready — hit Submit.');
@@ -170,14 +172,14 @@ function submit() {
 function undo() {
   if (busy || solved() || !plies()) return;
   game.undo();
-  selected = null; hints = []; verdict = null;
+  hints = []; verdict = null;
   setStatus(`${side(game.turn())} to play.`);
   render();
 }
 function clearLine() {
   if (busy || solved()) return;
   while (game.undo());
-  selected = null; hints = []; verdict = null;
+  hints = []; verdict = null;
   setStatus('Line cleared.');
   render();
 }
@@ -197,12 +199,15 @@ function hint() {
   let mv;
   if (game.turn() === player) {
     mv = plies() === 0 ? puzzle.line[0] : uci(shortestMate(game, remaining).move);
-    hints = hints.length ? [mv.slice(0, 2), mv.slice(2, 4)] : [mv.slice(0, 2)];
-    setStatus(hints.length === 1 ? 'Hint: move the highlighted piece.' : 'Hint: from → to is highlighted.');
+    const first = !hints.length;
+    hints = first
+      ? [{ orig: mv.slice(0, 2), brush: 'green' }]
+      : [{ orig: mv.slice(0, 2), dest: mv.slice(2, 4), brush: 'green' }];
+    setStatus(first ? 'Hint: move the circled piece.' : 'Hint: the arrow shows the move.');
   } else {
     mv = uci(stubbornReply(game, remaining));
-    hints = [mv.slice(0, 2), mv.slice(2, 4)];
-    setStatus(`Hint: ${side(game.turn())}'s toughest defence is highlighted.`);
+    hints = [{ orig: mv.slice(0, 2), dest: mv.slice(2, 4), brush: 'blue' }];
+    setStatus(`Hint: the arrow shows ${side(game.turn())}'s toughest defence.`);
   }
   render();
 }
@@ -213,7 +218,7 @@ function showSolution() {
   if (!state.results[i]) state.results[i] = 'revealed';
   saveState();
   while (game.undo());
-  busy = true; selected = null; hints = []; verdict = null;
+  busy = true; hints = []; verdict = null;
   let k = 0;
   const step = () => {
     if (k < puzzle.line.length) {
@@ -253,54 +258,37 @@ function setStatus(text, kind = '') {
   el.className = `status ${kind}`;
 }
 
-function squareOrder() {
-  const sq = [];
-  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
-    const rank = player === 'w' ? 8 - r : r + 1;
-    const file = player === 'w' ? f : 7 - f;
-    sq.push(FILES[file] + rank);
+const COLOR = { w: 'white', b: 'black' };
+
+function legalDests() {
+  const dests = new Map();
+  for (const m of game.moves({ verbose: true })) {
+    if (!dests.has(m.from)) dests.set(m.from, []);
+    dests.get(m.from).push(m.to);
   }
-  return sq;
+  return dests;
 }
 
 function render() {
-  const targets = selected ? game.moves({ square: selected, verbose: true }) : [];
-  const checkSq = game.inCheck() ? findKing(game.turn()) : null;
   const hist = game.history({ verbose: true });
   const last = hist[hist.length - 1];
-  boardEl.textContent = '';
-  squareOrder().forEach((s, i) => {
-    const el = document.createElement('div');
-    const f = FILES.indexOf(s[0]), r = +s[1];
-    el.className = `sq ${(f + r) % 2 ? 'dark' : 'light'}`;
-    el.dataset.square = s;
-    el.setAttribute('role', 'gridcell');
-    if (last && (last.from === s || last.to === s)) el.classList.add('last');
-    if (selected === s) el.classList.add('sel');
-    if (hints.includes(s)) el.classList.add('hint');
-    if (checkSq === s) el.classList.add('check');
-    const t = targets.find((m) => m.to === s);
-    if (t) { el.classList.add('target'); if (t.captured) el.classList.add('capture'); }
+  const locked = busy || solved();
+  const canMove = !locked && plies() < maxPlies() && !game.isGameOver();
+  const fen = game.fen();
+  const cfg = {
+    orientation: COLOR[player],
+    turnColor: COLOR[game.turn()],
+    lastMove: last ? [last.from, last.to] : undefined,
+    check: game.inCheck(),
+    movable: { color: canMove ? COLOR[game.turn()] : undefined, dests: canMove ? legalDests() : new Map() },
+  };
+  // Only push a new position when it changed (setting fen also clears drawn shapes).
+  if (fen !== shownFen) { cfg.fen = fen; shownFen = fen; }
+  cg.set(cfg);
+  cg.setAutoShapes(hints);
 
-    const p = game.get(s);
-    if (p) {
-      const img = document.createElement('img');
-      img.className = 'piece';
-      img.src = pieceSrc(p);
-      img.alt = '';
-      img.draggable = false;
-      el.appendChild(img);
-      el.setAttribute('aria-label', `${s} ${p.color === 'w' ? 'white' : 'black'} ${pieceName(p.type)}`);
-    } else {
-      el.setAttribute('aria-label', s);
-    }
-    if (i % 8 === 0) el.appendChild(coord('rank', s[1]));
-    if (i >= 56) el.appendChild(coord('file', s[0]));
-    boardEl.appendChild(el);
-  });
   renderMoves(hist);
   renderProgress();
-  const locked = busy || solved();
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === SET_SIZE - 1;
   $('hint').disabled = locked;
@@ -344,18 +332,6 @@ function cell(text, cls) {
   return s;
 }
 
-function coord(kind, text) {
-  const c = document.createElement('span');
-  c.className = `coord ${kind}`;
-  c.textContent = text;
-  return c;
-}
-function pieceName(t) { return { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' }[t]; }
-function findKing(color) {
-  for (const row of game.board()) for (const p of row) if (p && p.type === 'k' && p.color === color) return p.square;
-  return null;
-}
-
 function renderProgress() {
   const ol = $('progress');
   ol.textContent = '';
@@ -372,72 +348,18 @@ function renderProgress() {
   });
 }
 
-// ---------- input: tap and drag ----------
-let drag = null;
-
-function squareAt(x, y) {
-  const el = document.elementFromPoint(x, y);
-  const sq = el && el.closest('.sq');
-  return sq && boardEl.contains(sq) ? sq.dataset.square : null;
-}
-function movable(s) {
-  const p = s && game.get(s);
-  return p && p.color === game.turn() && !busy && !solved() && plies() < maxPlies();
-}
-
-boardEl.addEventListener('pointerdown', (e) => {
-  const s = squareAt(e.clientX, e.clientY);
-  if (!s) return;
-
-  if (selected && selected !== s && !movable(s)) {
-    if (!enterMove(selected, s)) { selected = null; render(); }
-    return;
-  }
-  if (!movable(s)) { if (selected) { selected = null; render(); } return; }
-
-  const wasSelected = selected === s;
-  selected = s;
-  render();
-  const pieceEl = boardEl.querySelector(`[data-square="${s}"] .piece`);
-  const ghost = pieceEl.cloneNode(true);
-  ghost.classList.add('drag-ghost');
-  ghost.style.left = e.clientX + 'px';
-  ghost.style.top = e.clientY + 'px';
-  const box = pieceEl.getBoundingClientRect();
-  ghost.style.width = box.width + 'px';
-  ghost.style.height = box.height + 'px';
-  ghost.hidden = true;
-  document.body.appendChild(ghost);
-  drag = { from: s, ghost, pieceEl, x0: e.clientX, y0: e.clientY, moved: false, wasSelected };
-  try { boardEl.setPointerCapture(e.pointerId); } catch {}
+// ---------- board (Chessground: drag/tap moves, right-click arrows & circles) ----------
+const cg = Chessground(boardEl, {
+  fen: '8/8/8/8/8/8/8/8',
+  coordinates: true,
+  animation: { enabled: true, duration: 200 },
+  highlight: { lastMove: true, check: true },
+  movable: { free: false, showDests: true, events: { after: (orig, dest) => { if (!enterMove(orig, dest)) render(); } } },
+  premovable: { enabled: false },
+  draggable: { enabled: true, showGhost: true },
+  drawable: { enabled: true, visible: true, eraseOnClick: true },
 });
-
-boardEl.addEventListener('pointermove', (e) => {
-  if (!drag) return;
-  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
-  drag.moved = true;
-  drag.ghost.hidden = false;
-  drag.pieceEl.classList.add('dragging-origin');
-  drag.ghost.style.left = e.clientX + 'px';
-  drag.ghost.style.top = e.clientY + 'px';
-});
-
-function endDrag(e, cancel) {
-  if (!drag) return;
-  const d = drag;
-  drag = null;
-  d.ghost.remove();
-  if (cancel) { render(); return; }
-  if (d.moved) {
-    const to = squareAt(e.clientX, e.clientY);
-    if (!to || to === d.from || !enterMove(d.from, to)) render();
-  } else if (d.wasSelected) {
-    selected = null;
-    render();
-  }
-}
-boardEl.addEventListener('pointerup', (e) => endDrag(e, false));
-boardEl.addEventListener('pointercancel', (e) => endDrag(e, true));
+new ResizeObserver(() => cg.redrawAll()).observe(boardEl);
 
 // ---------- buttons ----------
 $('prev').addEventListener('click', () => !busy && state.index > 0 && loadPuzzle(state.index - 1));

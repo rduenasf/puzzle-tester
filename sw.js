@@ -1,5 +1,5 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `mate-drills-${VERSION}`;
 const ASSETS = [
   './',
@@ -8,21 +8,13 @@ const ASSETS = [
   './app.js',
   './puzzles.js',
   './vendor/chess.js',
+  './vendor/chessground.min.js',
+  './vendor/chessground.base.css',
+  './vendor/chessground.brown.css',
+  './vendor/chessground.cburnett.css',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './pieces/cburnett/wK.svg',
-  './pieces/cburnett/wQ.svg',
-  './pieces/cburnett/wR.svg',
-  './pieces/cburnett/wB.svg',
-  './pieces/cburnett/wN.svg',
-  './pieces/cburnett/wP.svg',
-  './pieces/cburnett/bK.svg',
-  './pieces/cburnett/bQ.svg',
-  './pieces/cburnett/bR.svg',
-  './pieces/cburnett/bB.svg',
-  './pieces/cburnett/bN.svg',
-  './pieces/cburnett/bP.svg',
 ];
 
 self.addEventListener('install', (e) => {

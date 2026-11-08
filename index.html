@@ -9,6 +9,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/chessground.base.css">
+  <link rel="stylesheet" href="vendor/chessground.brown.css">
+  <link rel="stylesheet" href="vendor/chessground.cburnett.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -30,7 +33,7 @@
 
     <div class="play">
       <div class="board-col">
-        <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
+        <div class="board-frame"><div id="board" class="board" aria-label="Chessboard"></div></div>
         <p id="status" class="status" role="status" aria-live="polite"></p>
       </div>
 
@@ -65,7 +68,7 @@
     </section>
 
     <footer class="foot">
-      Tap or drag pieces. Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>. Pieces “cburnett” by Colin M.L. Burnett via <a href="https://lichess.org">lichess</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>).
+      Drag or tap to move. Right-click for circles, right-drag for arrows (Shift/Alt change colour). Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>. Board by <a href="https://github.com/lichess-org/chessground">Chessground</a> (lichess, GPL-3.0), pieces “cburnett” by Colin M.L. Burnett (CC BY-SA 3.0). <a href="https://github.com/rduenasf/puzzle-tester">Source</a>.
     </footer>
   </main>
 

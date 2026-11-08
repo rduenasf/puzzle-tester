@@ -18,8 +18,16 @@ npx http-server -p 8137 -c-1 .
 Append to `puzzles.js`: a FEN, the mate length, and one solution line in UCI. Positions should be a forced mate for the side to move.
 When you change any cached file, bump `VERSION` in `sw.js`.
 
+## Drawing
+
+Like Lichess: right-click a square for a circle, right-drag for an arrow. Shift or Ctrl = red, Alt = blue, Shift+Alt = yellow. Left-click clears them.
+
 ## Credits
 
-Piece images: "cburnett" by Colin M.L. Burnett via [lichess](https://github.com/lichess-org/lila), CC BY-SA 3.0 (see `pieces/cburnett/LICENSE.txt`).
+- Board: [Chessground](https://github.com/lichess-org/chessground) by lichess (GPL-3.0, see `vendor/chessground.LICENSE`), including the "cburnett" pieces by Colin M.L. Burnett (CC BY-SA 3.0).
 
-Move generation by [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause, see `vendor/chess.js.LICENSE`).
+- Move generation: [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause, see `vendor/chess.js.LICENSE`).
+
+## License
+
+GPL-3.0 (required by Chessground). See `LICENSE`.

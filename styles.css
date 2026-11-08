@@ -120,59 +120,19 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .mv.no::after { content: " ✗"; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .help button { min-height: 38px; font-size: 0.9rem; color: var(--muted); }
-.board {
-  position: relative;
+.board-frame {
   width: 100%;
-  aspect-ratio: 1;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
-  user-select: none;
+}
+.board {
+  width: 100%;
+  aspect-ratio: 1;
   touch-action: none;
 }
-.sq { position: relative; display: flex; align-items: center; justify-content: center; }
-.sq.light { background: var(--light-sq); }
-.sq.dark { background: var(--dark-sq); }
-.sq.last::before, .sq.sel::before, .sq.hint::before, .sq.check::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-}
-.sq.last::before { background: var(--last); }
-.sq.sel::before { background: var(--sel); }
-.sq.hint::before { background: var(--hint); }
-.sq.check::before { background: var(--check); }
-.sq.target::after {
-  content: ""; position: absolute; width: 30%; height: 30%;
-  border-radius: 50%; background: var(--dot); pointer-events: none;
-}
-.sq.target.capture::after {
-  width: 92%; height: 92%; background: transparent;
-  border: 5px solid var(--dot);
-}
-.coord {
-  position: absolute; font-size: clamp(8px, 2.2vw, 11px); font-weight: 600;
-  pointer-events: none; opacity: 0.85;
-}
-.coord.file { right: 3px; bottom: 1px; }
-.coord.rank { left: 3px; top: 1px; }
-.sq.light .coord { color: var(--dark-sq); }
-.sq.dark .coord { color: var(--light-sq); }
-
-.piece {
-  position: relative; z-index: 1;
-  width: 100%; height: 100%;
-  display: block;
-  pointer-events: none;
-  -webkit-user-drag: none;
-}
-.piece.dragging-origin { opacity: 0.3; }
-.drag-ghost {
-  position: fixed; z-index: 50; pointer-events: none;
-  transform: translate(-50%, -50%) scale(1.1);
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
-}
+/* keep Chessground's coordinates readable inside the board */
+.cg-wrap coords { font-size: clamp(8px, 2.2vw, 11px); font-weight: 600; }
 
 .board.shake { animation: shake 0.35s; }
 @keyframes shake {
