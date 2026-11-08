@@ -77,7 +77,10 @@ function saveState() {
 }
 
 // ---------- puzzle flow ----------
-const maxPlies = () => puzzle.mate * 2 - 1;
+// Same cap for every puzzle so it doesn't reveal the solution length:
+// the longest solution in the pool plus 3 extra moves.
+const MAX_PLIES = Math.max(...PUZZLES.map((p) => p.line.length)) + 3;
+const maxPlies = () => MAX_PLIES;
 const plies = () => game.history().length;
 const solved = () => verdict && verdict.ok;
 
@@ -93,12 +96,12 @@ function loadPuzzle(i) {
   verdict = null;
   mistakes = 0;
   usedHelp = false;
-  $('title').textContent = `${i + 1}. ${puzzle.title}`;
-  $('subtitle').textContent = `${side(player)} to move · mate in ${puzzle.mate}`;
+  $('title').textContent = `Puzzle ${i + 1}`;
+  $('subtitle').textContent = `${side(player)} to move`;
   $('turn').className = `turn ${player}`;
   setStatus(state.results[i]
     ? 'Already done — play it again or move on.'
-    : `Enter the full line (both sides, ${maxPlies()} move${maxPlies() > 1 ? 's' : ''}), then Submit.`);
+    : 'Find the best line. Play both sides, then Submit.');
   $('summary').hidden = true;
   render();
 }
@@ -118,7 +121,7 @@ function enterMove(from, to) {
   selected = null;
   hints = [];
   verdict = null; // editing the line clears an old verdict
-  if (plies() >= maxPlies() || game.isGameOver()) setStatus('Line complete — hit Submit.');
+  if (plies() >= maxPlies() || game.isGameOver()) setStatus('Ready — hit Submit.');
   else setStatus(`${side(game.turn())} to play.`);
   render();
   return true;
@@ -134,7 +137,8 @@ function evaluate(moves) {
     g.move(m);
     if (i % 2 === 1) { marks.push(null); return; }
     const remaining = puzzle.mate - (i / 2 + 1);
-    const good = g.isCheckmate() || (remaining > 0 && !g.isGameOver() && allRepliesLose(g, remaining));
+    // A mate that takes longer than the shortest forced mate doesn't count.
+    const good = remaining >= 0 && (g.isCheckmate() || (remaining > 0 && !g.isGameOver() && allRepliesLose(g, remaining)));
     marks.push(good);
     if (!good && ok) { ok = false; failAt = i; }
   });
@@ -158,7 +162,7 @@ function submit() {
   } else {
     mistakes++;
     const n = Math.floor(verdict.failAt / 2) + 1;
-    setStatus(`Not quite — your move ${n} doesn't force mate. Undo and try again.`, 'bad');
+    setStatus(`Not quite — your move ${n} isn't the strongest. Undo and try again.`, 'bad');
     shake();
   }
   render();
@@ -188,9 +192,9 @@ function lineOnTrack() {
 function hint() {
   if (busy || solved()) return;
   if (!lineOnTrack()) { setStatus('An earlier move doesn\'t work — undo back to it.', 'bad'); return; }
-  if (plies() >= maxPlies()) return;
-  usedHelp = true;
   const remaining = puzzle.mate - Math.floor(plies() / 2);
+  if (remaining < 1 || game.isGameOver()) { setStatus('This line runs too long — undo some moves.', 'bad'); return; }
+  usedHelp = true;
   let mv;
   if (game.turn() === player) {
     mv = plies() === 0 ? puzzle.line[0] : uci(shortestMate(game, remaining).move);
@@ -298,7 +302,7 @@ function render() {
   const locked = busy || solved();
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === SET_SIZE - 1;
-  $('hint').disabled = locked || plies() >= maxPlies();
+  $('hint').disabled = locked;
   $('solution').disabled = locked;
   $('undo').disabled = locked || !plies();
   $('clear').disabled = locked || !plies();
@@ -329,8 +333,7 @@ function renderMoves(hist) {
     row.appendChild(c);
     if (!white) { num++; row = null; }
   });
-  const left = maxPlies() - hist.length;
-  $('moves-count').textContent = solved() ? '' : left > 0 ? `${left} to go` : 'ready';
+  $('moves-count').textContent = hist.length >= maxPlies() ? 'max moves' : '';
   $('moves-empty').hidden = hist.length > 0;
 }
 function cell(text, cls) {
