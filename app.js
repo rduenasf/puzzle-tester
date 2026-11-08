@@ -3,8 +3,7 @@ import { PUZZLES } from './puzzles.js';
 
 const SET_SIZE = 10;
 const STORE_KEY = 'mate-drills-v1';
-const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
-const VS = '︎'; // force text (not emoji) presentation
+const pieceSrc = (p) => `pieces/cburnett/${p.color}${p.type.toUpperCase()}.svg`;
 const FILES = 'abcdefgh';
 
 const $ = (id) => document.getElementById(id);
@@ -285,10 +284,12 @@ function render() {
 
     const p = game.get(s);
     if (p) {
-      const span = document.createElement('span');
-      span.className = `piece ${p.color}`;
-      span.textContent = GLYPH[p.type] + VS;
-      el.appendChild(span);
+      const img = document.createElement('img');
+      img.className = 'piece';
+      img.src = pieceSrc(p);
+      img.alt = '';
+      img.draggable = false;
+      el.appendChild(img);
       el.setAttribute('aria-label', `${s} ${p.color === 'w' ? 'white' : 'black'} ${pieceName(p.type)}`);
     } else {
       el.setAttribute('aria-label', s);
@@ -402,7 +403,9 @@ boardEl.addEventListener('pointerdown', (e) => {
   ghost.classList.add('drag-ghost');
   ghost.style.left = e.clientX + 'px';
   ghost.style.top = e.clientY + 'px';
-  ghost.style.fontSize = getComputedStyle(pieceEl).fontSize;
+  const box = pieceEl.getBoundingClientRect();
+  ghost.style.width = box.width + 'px';
+  ghost.style.height = box.height + 'px';
   ghost.hidden = true;
   document.body.appendChild(ghost);
   drag = { from: s, ghost, pieceEl, x0: e.clientX, y0: e.clientY, moved: false, wasSelected };

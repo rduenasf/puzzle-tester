@@ -20,4 +20,6 @@ When you change any cached file, bump `VERSION` in `sw.js`.
 
 ## Credits
 
+Piece images: "cburnett" by Colin M.L. Burnett via [lichess](https://github.com/lichess-org/lila), CC BY-SA 3.0 (see `pieces/cburnett/LICENSE.txt`).
+
 Move generation by [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause, see `vendor/chess.js.LICENSE`).
