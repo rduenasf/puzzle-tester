@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mate Drills</title>
+  <meta name="description" content="Ten random checkmate puzzles. Works offline.">
+  <meta name="theme-color" content="#2b2622">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <h1>Mate Drills</h1>
+      <button id="new-set" class="ghost" type="button">New set</button>
+    </header>
+
+    <ol id="progress" class="progress" aria-label="Puzzle progress"></ol>
+
+    <section class="info">
+      <div>
+        <div id="title" class="title"></div>
+        <div id="subtitle" class="subtitle"></div>
+      </div>
+      <div id="turn" class="turn" aria-hidden="true"></div>
+    </section>
+
+    <div class="board-wrap">
+      <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
+    </div>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <nav class="controls">
+      <button id="prev" type="button" aria-label="Previous puzzle">‹</button>
+      <button id="hint" type="button">Hint</button>
+      <button id="retry" type="button">Retry</button>
+      <button id="solution" type="button">Solution</button>
+      <button id="next" type="button" aria-label="Next puzzle">›</button>
+    </nav>
+
+    <section id="summary" class="summary" hidden>
+      <h2>Set complete</h2>
+      <p id="summary-text"></p>
+      <button id="summary-new" class="primary" type="button">Play a new set</button>
+    </section>
+
+    <footer class="foot">
+      Tap or drag pieces. Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>.
+    </footer>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
