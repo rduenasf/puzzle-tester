@@ -1,0 +1,10 @@
+# Local environment
+.venv/
+__pycache__/
+
+# Game data and mining outputs stay out of the repo
+work/
+*.pgn
+*.csv
+sf_cache.json
+*_config.json
