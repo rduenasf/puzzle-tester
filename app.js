@@ -5,6 +5,7 @@ import { POLGAR } from './polgar.js';
 import { canMate, allRepliesLose } from './matesolver.js';
 import { STRATEGIC } from './strategic.js';
 import * as review from './strategic_review.js';
+import { Stockfish, Maia, MAIA_MB, sampleMove } from './engines.js';
 
 const SET_SIZE = 10;
 const MODE_KEY = 'drills-mode';
@@ -410,6 +411,7 @@ const plies = () => game.history().length;
 const solved = () => verdict && verdict.ok;
 
 function loadPuzzle(i) {
+  endSpar();
   state.index = i;
   saveState();
   puzzle = pool().find((p) => p.id === state.ids[i]);
@@ -447,11 +449,13 @@ function loadPuzzle(i) {
   cg.set({ animation: { enabled: false } });
   render();
   cg.set({ animation: { enabled: true } });
+  renderSpar();
 }
 
 const side = (c) => (c === 'w' ? 'White' : 'Black');
 
 function enterMove(from, to) {
+  if (spar) return sparMove(from, to);
   if (busy || solved() || plies() >= maxPlies()) return false;
   const legal = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
   if (!legal.length) return false;
@@ -658,6 +662,7 @@ function drawTrace() {
 // Show a line on the board (view only): up to and including index `upto`.
 function showLine(line, upto, animate, name) {
   if (busy || !line) return;
+  stopSpar();
   const end = Math.min(upto, line.length - 1);
   while (game.undo());
   hints = []; verdict = null; shownSolution = true;
@@ -766,7 +771,7 @@ function fmtTimeControl(tc) {
 }
 
 function submit() {
-  if (busy || solved()) return;
+  if (busy || solved() || spar) return;
   const moves = game.history({ verbose: true });
   if (!moves.length) { setStatus('Make a move first.', 'bad'); return; }
   verdict = evaluate(moves);
@@ -807,6 +812,7 @@ function submit() {
 }
 
 function undo() {
+  if (spar) { sparUndo(); return; }
   if (busy || solved() || !plies()) return;
   game.undo();
   hints = []; verdict = null;
@@ -814,7 +820,7 @@ function undo() {
   render();
 }
 function clearLine() {
-  if (busy || solved()) return;
+  if (busy || solved() || spar) return;
   while (game.undo());
   hints = []; verdict = null;
   setStatus('Line cleared.');
@@ -828,7 +834,7 @@ function lineOnTrack() {
 }
 
 function hint() {
-  if (busy || solved() || shownSolution) return;
+  if (busy || solved() || shownSolution || spar) return;
   if (isStrategy()) {
     if (plies()) { setStatus('Undo your move to get a hint.', 'bad'); return; }
     usedHelp = true;
@@ -862,7 +868,7 @@ function hint() {
 }
 
 function showSolution() {
-  if (busy || solved() || shownSolution) return;
+  if (busy || solved() || shownSolution || spar) return;
   const i = state.index;
   if (!state.results[i]) {
     state.results[i] = 'revealed';
@@ -933,8 +939,8 @@ function legalDests() {
 function render() {
   const hist = game.history({ verbose: true });
   const last = hist[hist.length - 1];
-  const locked = busy || solved() || shownSolution;
-  const canMove = !locked && plies() < maxPlies() && !game.isGameOver();
+  const locked = spar ? spar.thinking || game.turn() !== spar.me : busy || solved() || shownSolution;
+  const canMove = !locked && (spar || plies() < maxPlies()) && !game.isGameOver();
   const fen = game.fen();
   const cfg = {
     orientation: COLOR[player],
@@ -952,11 +958,11 @@ function render() {
   renderProgress();
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === state.ids.length - 1;
-  $('hint').disabled = locked;
-  $('solution').disabled = locked;
-  $('undo').disabled = locked || !plies();
-  $('clear').disabled = locked || !plies();
-  $('submit').disabled = locked || !plies();
+  $('hint').disabled = locked || !!spar;
+  $('solution').disabled = locked || !!spar;
+  $('undo').disabled = spar ? plies() <= spar.start : locked || !plies();
+  $('clear').disabled = locked || !!spar || !plies();
+  $('submit').disabled = locked || !!spar || !plies();
 }
 
 function renderMoves(hist) {
@@ -983,7 +989,7 @@ function renderMoves(hist) {
     row.appendChild(c);
     if (!white) { num++; row = null; }
   });
-  $('moves-count').textContent = !isStrategy() && hist.length >= maxPlies() ? 'max moves' : '';
+  $('moves-count').textContent = spar ? 'vs engine' : !isStrategy() && hist.length >= maxPlies() ? 'max moves' : '';
   $('moves-empty').textContent = isStrategy()
     ? 'Play your move on the board.'
     : 'Play the moves for both sides on the board.';
@@ -1070,6 +1076,179 @@ const cg = Chessground(boardEl, {
   drawable: { enabled: true, visible: true, eraseOnClick: true },
 });
 new ResizeObserver(() => cg.redrawAll()).observe(boardEl);
+
+// ---------- play it out vs an engine (Stockfish or Maia) ----------
+// From whatever is on the board, you play one side and the engine the other.
+// "Back to the puzzle" restores the line you had entered.
+const SPAR_KEY = 'spar-settings-v1';
+const sparCfg = (() => {
+  const d = { engine: 'sf', sf: '', maia: '' };
+  try { return { ...d, ...JSON.parse(localStorage.getItem(SPAR_KEY)) }; } catch { return d; }
+})();
+let spar = null; // { me: 'w'|'b', start: ply count, saved: { line, verdict, hints }, thinking, token, note }
+let sparToken = 0;
+const engines = {};
+const sf = () => (engines.sf ??= new Stockfish());
+const maia = () => (engines.maia ??= new Maia());
+const maiaElo = () => +sparCfg.maia || puzzle?.maiaElo || 1500;
+const sparName = () => (sparCfg.engine === 'maia' ? `Maia ${maiaElo()}` : `Stockfish${sparCfg.sf ? ` ${sparCfg.sf}` : ''}`);
+const pushUci = (u) => game.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
+
+// Score for the side to move -> White's view: "+1.20", "#3", "#-2".
+function fmtScore(score, turn) {
+  if (!score) return '?';
+  const s = turn === 'w' ? 1 : -1;
+  return score.mate != null ? `#${s * score.mate}` : fmtEval(s * score.cp);
+}
+
+function startSpar(me) {
+  if (busy) return;
+  spar = {
+    me, start: plies(), thinking: false, token: ++sparToken, note: '',
+    saved: { line: game.history({ verbose: true }).map(uci), verdict, hints },
+  };
+  verdict = null; hints = [];
+  setDetail('');
+  renderSpar();
+  engineTurn();
+}
+// Leave without touching the board (a new puzzle is being loaded).
+function endSpar() {
+  if (!spar) return;
+  spar = null; sparToken++;
+  engines.sf?.stop();
+}
+// Leave and put back the line that was on the board before.
+function stopSpar() {
+  if (!spar) return;
+  const s = spar.saved;
+  endSpar();
+  while (game.undo());
+  s.line.forEach(pushUci);
+  verdict = s.verdict; hints = s.hints;
+  setStatus('Back to the puzzle.');
+  renderSpar();
+  render();
+}
+
+function sparMove(from, to) {
+  if (spar.thinking || game.turn() !== spar.me || game.isGameOver()) return false;
+  const legal = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
+  if (!legal.length) return false;
+  game.move({ from, to, promotion: legal[0].promotion ? 'q' : undefined });
+  hints = [];
+  engineTurn();
+  return true;
+}
+
+function sparUndo() {
+  if (plies() <= spar.start) return;
+  spar.token = ++sparToken; spar.thinking = false;
+  engines.sf?.stop();
+  do game.undo(); while (plies() > spar.start && game.turn() !== spar.me);
+  hints = []; spar.note = '';
+  engineTurn();
+}
+
+async function think(fen) {
+  const turn = fen.split(' ')[1];
+  if (sparCfg.engine === 'maia') {
+    const m = maia();
+    m.onProgress = (got, total) => setStatus(`Downloading Maia… ${total ? Math.min(99, Math.round((100 * got) / total)) + '%' : `${Math.round(got / 1e6)} MB`}`);
+    if (!m.ready) setStatus(`Loading Maia (${MAIA_MB} MB the first time)…`);
+    const elo = maiaElo();
+    const { policy, win } = await m.evaluate(fen, elo, elo);
+    const [move, p] = sampleMove(policy);
+    const top = policy.slice(0, 3).map(([u, q]) => `${sanOf(fen, u)} ${Math.round(100 * q)}%`).join(', ');
+    return { move, note: `Maia ${elo} played ${sanOf(fen, move)} (${Math.round(100 * p)}% of players at this level). Most likely: ${top}. White's expected score ${Math.round(100 * win)}%.` };
+  }
+  const elo = +sparCfg.sf || null;
+  if (!engines.sf?.ready) setStatus('Loading Stockfish…');
+  const r = await sf().search(fen, { movetime: elo ? 500 : 1500, elo });
+  if (!r.move) return { move: null, note: '' };
+  const pv = r.pv.length > 1 ? ` Expected line: ${pvSan(fen, r.pv.slice(0, 8))}.` : '';
+  return { move: r.move, note: `${sparName()} played ${sanOf(fen, r.move)}, eval ${fmtScore(r.score, turn)}.${pv}` };
+}
+function pvSan(fen, pv) {
+  const g = new Chess(fen), out = [];
+  for (const u of pv) {
+    try { out.push(g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }).san); } catch { break; }
+  }
+  return out.join(' ');
+}
+
+async function engineTurn() {
+  if (!spar) return;
+  if (game.isGameOver() || game.turn() === spar.me) { sparStatus(); render(); return; }
+  const token = spar.token, fen = game.fen();
+  spar.thinking = true;
+  setStatus(`${sparName()} is thinking…`);
+  render();
+  let r;
+  try {
+    r = await think(fen);
+  } catch (err) {
+    if (spar && spar.token === token) {
+      spar.thinking = false;
+      setStatus(`The engine failed: ${err.message}`, 'bad');
+      render();
+    }
+    return;
+  }
+  if (!spar || spar.token !== token || game.fen() !== fen) return;
+  spar.thinking = false;
+  if (r.move) pushUci(r.move);
+  spar.note = r.note;
+  hints = [];
+  sparStatus();
+  render();
+}
+
+function sparStatus() {
+  if (!spar) return;
+  if (game.isCheckmate()) setStatus(`Checkmate: ${side(game.turn() === 'w' ? 'b' : 'w')} wins.`, game.turn() === spar.me ? 'bad' : 'good');
+  else if (game.isGameOver()) setStatus('Draw.');
+  else setStatus(`Your move (${side(spar.me)}) against ${sparName()}.`);
+  $('spar-info').textContent = spar.note || `You play ${side(spar.me)}. Undo takes back your last move.`;
+}
+
+function renderSpar() {
+  const on = !!spar;
+  $('spar-start').hidden = on;
+  $('spar-stop').hidden = !on;
+  $('spar-engine').value = sparCfg.engine;
+  $('spar-sf').value = sparCfg.sf;
+  $('spar-sf-wrap').hidden = sparCfg.engine !== 'sf';
+  $('spar-maia-wrap').hidden = sparCfg.engine !== 'maia';
+  const auto = $('spar-maia').options[0];
+  auto.textContent = puzzle?.maiaElo ? `Your rating (${puzzle.maiaElo})` : 'Default (1500)';
+  $('spar-maia').value = sparCfg.maia;
+  if (!on) {
+    $('spar-info').textContent = sparCfg.engine === 'maia' && !engines.maia?.ready
+      ? `Maia plays like a human at the chosen rating. The first game downloads it (${MAIA_MB} MB); after that it works offline.`
+      : 'You play the side the puzzle gives you and the engine the other, from the position on the board. Play a move first to see how the engine answers it.';
+  }
+}
+
+{
+  const sel = $('spar-maia');
+  const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
+  add('', 'Your rating');
+  for (let r = 600; r <= 2600; r += 100) add(String(r), String(r));
+}
+const saveSparCfg = () => { try { localStorage.setItem(SPAR_KEY, JSON.stringify(sparCfg)); } catch {} };
+$('spar-engine').addEventListener('change', (e) => { sparCfg.engine = e.target.value; saveSparCfg(); renderSpar(); });
+$('spar-sf').addEventListener('change', (e) => { sparCfg.sf = e.target.value; saveSparCfg(); });
+$('spar-maia').addEventListener('change', (e) => { sparCfg.maia = e.target.value; saveSparCfg(); });
+$('spar-start').addEventListener('click', () => startSpar(player));
+$('spar-swap').addEventListener('click', () => {
+  if (!spar) { startSpar(player === 'w' ? 'b' : 'w'); return; }
+  spar.me = spar.me === 'w' ? 'b' : 'w';
+  spar.token = ++sparToken; spar.thinking = false;
+  engines.sf?.stop();
+  engineTurn();
+});
+$('spar-stop').addEventListener('click', stopSpar);
 
 // ---------- buttons ----------
 $('prev').addEventListener('click', () => !busy && state.index > 0 && loadPuzzle(state.index - 1));

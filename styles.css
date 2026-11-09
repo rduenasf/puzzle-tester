@@ -249,6 +249,14 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 .wrong-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .wrong-chart .pt { cursor: pointer; }
 .wrong-chart .pt:hover { stroke: var(--text); stroke-width: 2; }
+/* Play it out vs engine */
+.spar-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.spar-opts label { display: grid; gap: 2px; color: var(--muted); font-size: 0.78rem; min-width: 0; }
+.spar-opts select {
+  font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface); width: 100%;
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 34px;
+}
+#spar-stop { width: 100%; margin-top: 8px; min-height: 36px; font-size: 0.85rem; }
 .why .row2 { margin-top: 8px; }
 .why .row2 button { min-height: 36px; padding: 6px 8px; font-size: 0.85rem; }
 

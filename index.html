@@ -94,6 +94,34 @@
           <button id="hint" type="button" class="ghost">Hint</button>
           <button id="solution" type="button" class="ghost">Solution</button>
         </div>
+        <details id="spar" class="why spar">
+          <summary>Play it out vs engine</summary>
+          <div class="spar-opts">
+            <label>Opponent
+              <select id="spar-engine">
+                <option value="sf">Stockfish</option>
+                <option value="maia">Maia (human-like)</option>
+              </select>
+            </label>
+            <label id="spar-sf-wrap">Strength
+              <select id="spar-sf">
+                <option value="">Full strength</option>
+                <option value="2600">Elo 2600</option>
+                <option value="2200">Elo 2200</option>
+                <option value="1800">Elo 1800</option>
+                <option value="1500">Elo 1500</option>
+                <option value="1320">Elo 1320 (weakest)</option>
+              </select>
+            </label>
+            <label id="spar-maia-wrap" hidden>Rating <select id="spar-maia"></select></label>
+          </div>
+          <div class="row2">
+            <button id="spar-start" type="button" class="primary">Play from here</button>
+            <button id="spar-swap" type="button" title="Let the engine play your side and you the other">Switch sides</button>
+          </div>
+          <p id="spar-info" class="why-note">Plays the other side from the position on the board. Play a move first to see how the engine answers it.</p>
+          <button id="spar-stop" type="button" hidden>Back to the puzzle</button>
+        </details>
         <details id="why" class="why" open hidden>
           <summary>Why this problem</summary>
           <ul id="why-list"></ul>
@@ -138,7 +166,7 @@
     </section>
 
     <footer class="foot">
-      Drag or tap to move. Right-click for circles, right-drag for arrows (Shift/Alt change colour). Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>. Board by <a href="https://github.com/lichess-org/chessground">Chessground</a> (lichess, GPL-3.0), pieces “cburnett” by Colin M.L. Burnett (CC BY-SA 3.0). <a href="https://github.com/rduenasf/puzzle-tester">Source</a>.
+      Drag or tap to move. Right-click for circles, right-drag for arrows (Shift/Alt change colour). Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>. Board by <a href="https://github.com/lichess-org/chessground">Chessground</a> (lichess, GPL-3.0), pieces “cburnett” by Colin M.L. Burnett (CC BY-SA 3.0). Engines: <a href="https://github.com/nmrugg/stockfish.js">Stockfish.js</a> (GPL-3.0), <a href="https://www.maiachess.com/">Maia-3</a> via the <a href="https://github.com/CSSLab/maia-platform-frontend">Maia platform</a> (GPL-3.0) and <a href="https://onnxruntime.ai/">ONNX Runtime</a> (MIT). <a href="https://github.com/rduenasf/puzzle-tester">Source</a>.
     </footer>
   </main>
 

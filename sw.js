@@ -1,6 +1,10 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v19';
+const VERSION = 'v20';
 const CACHE = `mate-drills-${VERSION}`;
+// Engine files (Stockfish, ONNX Runtime, the Maia model: ~65 MB) are fetched only when first
+// used and never change under the same name, so they are served cache-first from a cache of
+// their own that survives VERSION bumps. Give a changed file a new name.
+const ENGINES = 'mate-drills-engines-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +13,8 @@ const ASSETS = [
   './puzzles.js',
   './polgar.js',
   './matesolver.js',
+  './engines.js',
+  './maia-worker.js',
   './strategic.js',
   './strategic_review.js',
   './vendor/chess.js',
@@ -28,14 +34,23 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('mate-drills-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('mate-drills-') && k !== CACHE && k !== ENGINES).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
 // Network-first: always fresh when online, cached copy when offline.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.pathname.includes('/vendor/engines/')) {
+    e.respondWith(caches.open(ENGINES).then((c) => c.match(e.request, { ignoreSearch: true }).then((hit) => hit
+      || fetch(e.request).then((res) => {
+        if (res.status === 200) c.put(e.request, res.clone());
+        return res;
+      }))));
+    return;
+  }
   e.respondWith(
     fetch(e.request)
       .then((res) => {
