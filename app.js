@@ -1043,6 +1043,16 @@ $('solution').addEventListener('click', showSolution);
 $('show-punish').addEventListener('click', () => showLine(puzzle.punish, 99, true, 'punishment of your game move'));
 $('show-best').addEventListener('click', () => showLine(puzzle.line, (puzzle.punish || []).length - 1, true, 'best line'));
 const startNewSet = () => { if (busy) return; state = newSet(); saveState(); loadPuzzle(0); };
+$('copy-fen').addEventListener('click', async () => {
+  const b = $('copy-fen');
+  try {
+    await navigator.clipboard.writeText(puzzle.fen);
+    b.textContent = 'Copied!';
+    setTimeout(() => { b.textContent = 'Copy FEN'; }, 1500);
+  } catch {
+    window.prompt('FEN for this puzzle:', puzzle.fen); // clipboard blocked: let the user copy it by hand
+  }
+});
 $('new-set').addEventListener('click', startNewSet);
 $('summary-new').addEventListener('click', startNewSet);
 
