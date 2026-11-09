@@ -1,6 +1,8 @@
 import { Chess } from './vendor/chess.js';
 import { Chessground } from './vendor/chessground.min.js';
 import { PUZZLES } from './puzzles.js';
+import { POLGAR } from './polgar.js';
+import { canMate, allRepliesLose } from './matesolver.js';
 import { STRATEGIC } from './strategic.js';
 import * as review from './strategic_review.js';
 
@@ -16,7 +18,20 @@ const MODES = {
 let mode = (() => {
   try { const m = localStorage.getItem(MODE_KEY); return MODES[m] ? m : 'mate'; } catch { return 'mate'; }
 })();
-const pool = () => MODES[mode].pool;
+// Mate mode is split into sections, each with its own random set and progress.
+const SECTION_KEY = 'mate-section';
+const polgar = (n) => POLGAR.filter((p) => p.mate === n);
+const SECTIONS = {
+  classic: { pool: PUZZLES, key: 'mate-drills-v1', label: 'Patterns', about: 'Classic mating patterns' },
+  m1: { pool: polgar(1), key: 'mate-polgar-m1-v1', label: 'Mate in 1', about: 'Polgár: mate in one' },
+  m2: { pool: polgar(2), key: 'mate-polgar-m2-v1', label: 'Mate in 2', about: 'Polgár: mate in two' },
+  m3: { pool: polgar(3), key: 'mate-polgar-m3-v1', label: 'Mate in 3', about: 'Polgár: mate in three' },
+};
+let section = (() => {
+  try { const s = localStorage.getItem(SECTION_KEY); return SECTIONS[s] ? s : 'classic'; } catch { return 'classic'; }
+})();
+const pool = () => (mode === 'mate' ? SECTIONS[section].pool : MODES[mode].pool);
+const setKey = () => (mode === 'mate' ? SECTIONS[section].key : MODES[mode].key);
 const isStrategy = () => mode !== 'mate'; // strategy and review share the one-move flow
 
 // Strategy problems: grade the first move from precomputed centipawn losses.
@@ -55,24 +70,6 @@ const fmtClock = (s) => { const r = Math.floor(s); return `${Math.floor(r / 60)}
 const boardEl = $('board');
 
 // ---------- mate solver (small depths only) ----------
-function canMate(game, n) {
-  for (const m of game.moves({ verbose: true })) {
-    game.move(m);
-    const ok = game.isCheckmate() || (n > 1 && !game.isGameOver() && allRepliesLose(game, n - 1));
-    game.undo();
-    if (ok) return m;
-  }
-  return null;
-}
-function allRepliesLose(game, n) {
-  for (const r of game.moves({ verbose: true })) {
-    game.move(r);
-    const lost = !!canMate(game, n);
-    game.undo();
-    if (!lost) return false;
-  }
-  return true;
-}
 function shortestMate(game, max) {
   for (let k = 1; k <= max; k++) {
     const m = canMate(game, k);
@@ -112,7 +109,7 @@ function newSet() {
 function loadState() {
   if (isBrowse()) return browseState();
   try {
-    const s = JSON.parse(localStorage.getItem(MODES[mode].key));
+    const s = JSON.parse(localStorage.getItem(setKey()));
     const n = Math.min(SET_SIZE, pool().length);
     if (s && Array.isArray(s.ids) && s.ids.length === n &&
         s.ids.every((id) => pool().some((p) => p.id === id))) return s;
@@ -127,7 +124,7 @@ function saveState() {
     refreshStatusCounts();
     return;
   }
-  try { localStorage.setItem(MODES[mode].key, JSON.stringify(state)); } catch {}
+  try { localStorage.setItem(setKey(), JSON.stringify(state)); } catch {}
 }
 
 // ---------- browse mode (Review): numbered list + filters ----------
@@ -404,7 +401,7 @@ $('f-go').addEventListener('submit', (e) => {
 // Same cap for every puzzle so it doesn't reveal the solution length:
 // the longest solution in the pool plus 3 extra moves.
 // Strategy problems take one move: the decision itself (Solution may play more).
-const MAX_PLIES = Math.max(...PUZZLES.map((p) => p.line.length)) + 3;
+const MAX_PLIES = Math.max(...[...PUZZLES, ...POLGAR].map((p) => p.line.length)) + 3;
 const maxPlies = () => (isStrategy() && !busy ? 1 : MAX_PLIES);
 const plies = () => game.history().length;
 const solved = () => verdict && verdict.ok;
@@ -426,7 +423,8 @@ function loadPuzzle(i) {
   usedHelp = false;
   timing = false;
   if (isStrategy() && !state.results[i]) timerStart();
-  $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}` : `Puzzle ${i + 1}`;
+  $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}`
+    : mode === 'mate' && section !== 'classic' ? `Puzzle ${i + 1} · ${puzzle.title}` : `Puzzle ${i + 1}`;
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
     + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
@@ -1056,6 +1054,7 @@ function setMode(m) {
   document.title = MODES[m].title;
   for (const k of Object.keys(MODES)) $(`mode-${k}`).setAttribute('aria-pressed', String(m === k));
   $('new-set').hidden = isBrowse();
+  $('sections').hidden = m !== 'mate';
   document.querySelector('.app').classList.toggle('browsing', isBrowse());
   if (isBrowse()) { loadStore(); fillFilters(); }
   state = loadState() || newSet();
@@ -1067,6 +1066,23 @@ function setMode(m) {
 }
 for (const k of Object.keys(MODES)) $(`mode-${k}`).addEventListener('click', () => mode !== k && setMode(k));
 
+// Section buttons (mate mode only).
+for (const [k, sec] of Object.entries(SECTIONS)) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.id = `section-${k}`;
+  b.textContent = sec.label;
+  b.title = `${sec.about} (${sec.pool.length} puzzles)`;
+  b.setAttribute('aria-pressed', String(k === section));
+  b.addEventListener('click', () => {
+    if (busy || k === section) return;
+    section = k;
+    try { localStorage.setItem(SECTION_KEY, k); } catch {}
+    for (const j of Object.keys(SECTIONS)) $(`section-${j}`).setAttribute('aria-pressed', String(j === k));
+    setMode('mate');
+  });
+  $('sections').appendChild(b);
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('button')) return;
