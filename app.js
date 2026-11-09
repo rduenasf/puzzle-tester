@@ -26,6 +26,32 @@ const STRATEGY_OK = 30; // Best or Good counts as solved
 const SOLUTION_PLIES = 10; // how much of the engine line Solution plays out
 
 const $ = (id) => document.getElementById(id);
+
+// ---------- solve timer (strategy): your thinking time here vs. in the game ----------
+// Counts only while the page is visible. Saved per problem id the first time it's finished.
+const TIMES_KEY = 'strategy-times-v1';
+const times = (() => { try { return JSON.parse(localStorage.getItem(TIMES_KEY)) || {}; } catch { return {}; } })();
+let timing = false, thinkMs = 0, since = 0;
+function timerStart() { timing = true; thinkMs = 0; since = performance.now(); }
+document.addEventListener('visibilitychange', () => {
+  if (!timing) return;
+  if (document.hidden) thinkMs += performance.now() - since; else since = performance.now();
+});
+function recordTime(how) {
+  if (!timing) return;
+  if (!document.hidden) thinkMs += performance.now() - since;
+  timing = false;
+  times[puzzle.id] = { ms: Math.round(thinkMs), how, tries: mistakes };
+  try { localStorage.setItem(TIMES_KEY, JSON.stringify(times)); } catch {}
+}
+// 1.4s, 21s, 1:12
+function fmtSecs(s) {
+  if (s < 10) return `${s.toFixed(1)}s`;
+  if (s < 60) return `${Math.round(s)}s`;
+  const r = Math.round(s);
+  return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}`;
+}
+const fmtClock = (s) => { const r = Math.floor(s); return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}`; };
 const boardEl = $('board');
 
 // ---------- mate solver (small depths only) ----------
@@ -132,7 +158,125 @@ const FILTERS = {
     of: (p) => store.done[p.id] || 'todo',
     match: (p, v) => (v === 'done' ? !!store.done[p.id] : (store.done[p.id] || 'todo') === v),
   },
+  fb: {
+    label: 'any feedback',
+    of: (p) => fbOf(p)?.rating || 'unrated',
+    name: (v) => FB_RATING[v] || 'not rated',
+  },
 };
+
+// ---------- feedback on Review problems (for tuning the miner: miner/feedback.py) ----------
+// Keyed by game link + FEN, not the #number or id, so ratings survive a re-export.
+// Each entry keeps a snapshot of the problem's mining values, so the file stands on its own.
+const FB_KEY = 'review-feedback-v1';
+const FB_RATING = { good: '👍 good', meh: '🤷 meh', bad: '👎 bad' };
+// Tag keys are read by miner/feedback.py; keep them stable.
+const FB_TAGS = [
+  ['instructive', 'Instructive'],
+  ['habit', 'A habit of mine'],
+  ['tactical', 'Tactic, not strategy'],
+  ['noise', 'My move was fine'],
+  ['deep', 'Needs deep calculation'],
+  ['obvious', 'Too obvious'],
+  ['unclear', "Can't see why best is better"],
+  ['engine_move', 'Engine-only move'],
+  ['decided', 'Game already decided'],
+  ['time', 'Time scramble'],
+  ['wrong_verdict', 'Verdict/category wrong'],
+  ['duplicate', 'Seen this one'],
+];
+const fbKey = (p) => `${p.link || ''}#${p.fen}`;
+let feedback = (() => { try { return JSON.parse(localStorage.getItem(FB_KEY)) || {}; } catch { return {}; } })();
+const fbOf = (p) => feedback[fbKey(p)];
+function fbSave() { try { localStorage.setItem(FB_KEY, JSON.stringify(feedback)); } catch {} }
+function fbSnapshot(p) {
+  return {
+    id: p.id, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
+    played: p.played, minedBest: p.minedBest, best: p.line[0],
+    kind: p.kind, timeClass: p.timeClass, timeControl: p.timeControl, maiaElo: p.maiaElo,
+    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, checks: p.checks,
+    playedLossNow: p.scores[p.played] ?? null,
+    nature: p.nature?.kind ?? null,
+    changedTop: p.changed?.explains && p.changed.terms.length ? p.changed.terms[0][0] : null,
+    gameClock: p.gameClock ?? null,
+  };
+}
+function fbUpdate(change, p = puzzle) {
+  const k = fbKey(p);
+  const cur = feedback[k] || { rating: null, tags: [], note: '' };
+  const next = { ...cur, ...change, at: new Date().toISOString(), problem: fbSnapshot(p) };
+  if (!next.rating && !next.tags.length && !next.note.trim()) delete feedback[k];
+  else feedback[k] = next;
+  fbSave();
+  renderFeedback();
+  refreshCounts('fb');
+  renderProgress();
+  if (p === puzzle) $('fb-saved').textContent = feedback[k] ? '· saved' : '';
+}
+function renderFeedback() {
+  const box = $('fb');
+  box.hidden = !isBrowse();
+  if (!isBrowse()) return;
+  const f = fbOf(puzzle) || { rating: null, tags: [], note: '' };
+  for (const b of box.querySelectorAll('.fb-verdict button')) b.setAttribute('aria-pressed', String(f.rating === b.dataset.v));
+  for (const b of $('fb-tags').children) b.setAttribute('aria-pressed', String(f.tags.includes(b.dataset.t)));
+  if (document.activeElement !== $('fb-note')) $('fb-note').value = f.note || '';
+  const n = Object.keys(feedback).length;
+  $('fb-count').textContent = n ? `${n} rated` : 'No feedback yet';
+  $('fb-export').disabled = !n;
+}
+for (const [t, text] of FB_TAGS) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.t = t; b.textContent = text; b.setAttribute('aria-pressed', 'false');
+  b.addEventListener('click', () => {
+    const tags = (fbOf(puzzle)?.tags || []).slice();
+    const i = tags.indexOf(t);
+    if (i >= 0) tags.splice(i, 1); else tags.push(t);
+    fbUpdate({ tags });
+  });
+  $('fb-tags').append(b);
+}
+for (const b of document.querySelectorAll('.fb-verdict button')) {
+  b.addEventListener('click', () => fbUpdate({ rating: fbOf(puzzle)?.rating === b.dataset.v ? null : b.dataset.v }));
+}
+let noteTimer;
+$('fb-note').addEventListener('input', () => {
+  clearTimeout(noteTimer);
+  const p = puzzle, note = $('fb-note').value;
+  noteTimer = setTimeout(() => fbUpdate({ note }, p), 400);
+});
+$('fb-note').addEventListener('blur', () => { clearTimeout(noteTimer); if (($('fb-note').value) !== (fbOf(puzzle)?.note || '')) fbUpdate({ note: $('fb-note').value }); });
+$('fb-note').addEventListener('keydown', (e) => e.stopPropagation()); // don't trigger board shortcuts
+$('fb-export').addEventListener('click', () => {
+  const data = {
+    format: 'review-feedback', version: 1, exported: new Date().toISOString(),
+    config: MODES.review.config || null, entries: feedback,
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+  a.download = `review-feedback-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('fb-import').addEventListener('click', () => $('fb-file').click());
+$('fb-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.format !== 'review-feedback' || !data.entries) throw new Error('not a feedback export');
+    let added = 0;
+    for (const [k, v] of Object.entries(data.entries)) {  // newer rating wins
+      if (!feedback[k] || (v.at || '') > (feedback[k].at || '')) { feedback[k] = v; added++; }
+    }
+    fbSave();
+    renderFeedback(); refreshCounts('fb'); renderProgress();
+    setStatus(`Imported ${added} rating(s) from ${file.name}.`, 'good');
+  } catch (err) {
+    setStatus(`Couldn't import ${file.name}: ${err.message}.`, 'bad');
+  }
+});
 let store = { done: {}, filters: {}, current: null };
 function loadStore() {
   try {
@@ -166,6 +310,9 @@ function fillFilters() {
       for (const v of ['todo', 'done', 'clean', 'helped', 'revealed']) {
         add(v, `${v === 'todo' ? 'not done' : v === 'done' ? 'done (any)' : STATUS_LABEL[v]} (${n(v)})`);
       }
+    } else if (k === 'fb') {
+      const n = (v) => pool().filter((p) => f.of(p) === v).length;
+      for (const v of ['unrated', 'good', 'meh', 'bad']) add(v, `${f.name(v)} (${n(v)})`);
     } else if (k === 'tc') {
       const byClass = {};
       for (const p of pool()) {
@@ -186,11 +333,13 @@ function fillFilters() {
     sel.value = store.filters[k] || '';
   }
 }
-function refreshStatusCounts() {
-  const sel = $('f-status');
+function refreshStatusCounts() { refreshCounts('status'); }
+function refreshCounts(k) {
+  const f = FILTERS[k];
+  const sel = $(`f-${k}`);
   for (const o of sel.options) {
     if (!o.value) continue;
-    const n = pool().filter((p) => FILTERS.status.match(p, o.value)).length;
+    const n = pool().filter((p) => (f.match ? f.match(p, o.value) : f.of(p) === o.value)).length;
     o.textContent = o.textContent.replace(/\(\d+\)$/, `(${n})`);
   }
 }
@@ -275,6 +424,8 @@ function loadPuzzle(i) {
   setDetail('');
   cg.setShapes([]);
   usedHelp = false;
+  timing = false;
+  if (isStrategy() && !state.results[i]) timerStart();
   $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}` : `Puzzle ${i + 1}`;
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
@@ -287,6 +438,8 @@ function loadPuzzle(i) {
       : 'Find the best line. Play both sides, then Submit.');
   $('summary').hidden = true;
   // A finished strategy problem keeps showing its game info and checks when revisited.
+  $('fb-saved').textContent = '';
+  renderFeedback();
   if (state.results[i] && isStrategy()) showGameDetail();
   else { showWhy(false); $('wrong').hidden = true; }
   // Snap to the new puzzle instead of animating from the previous position.
@@ -364,54 +517,83 @@ function showGameDetail() {
     a.textContent = 'Open game';
     el.append(a);
   }
+  const t = timeLine();
+  if (t) el.append(document.createElement('br'), t);
   el.hidden = false;
   showWhy(true);
   showWrong();
+}
+
+// "In the game: 21s on this move (1:45 on the clock). Here: 1:12 to find it, 2 wrong tries."
+function timeLine() {
+  const g = puzzle.gameClock, t = times[puzzle.id];
+  const parts = [];
+  if (g) parts.push(`In the game: ${fmtSecs(g.spent)} on this move (${fmtClock(g.left)} on the clock).`);
+  if (t) {
+    const took = fmtSecs(t.ms / 1000);
+    const tries = t.tries ? `, ${t.tries} wrong tr${t.tries > 1 ? 'ies' : 'y'}` : '';
+    parts.push(t.how === 'revealed' ? `Here: revealed after ${took}${tries}.` : `Here: ${took} to find it${tries}.`);
+  }
+  return parts.join(' ');
 }
 
 // ---------- "What went wrong": punishment line + shallow-eval trace ----------
 // Kind is decided by material (does the punishment actually win material vs the best line?);
 // the eval trace only says when a quick look starts to see the damage.
 const pawns = (k) => `${k} pawn${k > 1 ? 's' : ''}`;
-const NATURE_TEXT = {
-  positional: () => `Positional: the punishment wins no material in the next ${puzzle.trace.punish.length} turns. The engine's verdict is about the position itself: structure, piece activity, king safety.`,
-  positional_then_material: (n) => `Positional first, material later: nothing is lost at once, but the worse position eventually costs material. From ${n.matMove} you stay ${pawns(n.matGap)} down compared with the best line.`,
-  concrete: (n) => `Concrete: the punishment wins material quickly. From ${n.matMove} you stay ${pawns(n.matGap)} down compared with the best line.`,
-  marginal: () => `Marginal: the fresh engine score rates your move only ${puzzle.scores[puzzle.played]}cp worse than the best, so this may not be a real mistake.`,
-};
+const moves = (k) => `${k} move${k > 1 ? 's' : ''}`;
 
-function showWrong() {
-  const box = $('wrong');
-  if (!isStrategy() || !puzzle.trace || !puzzle.nature) { box.hidden = true; return; }
-  const n = puzzle.nature;
-  let text = NATURE_TEXT[n.kind] ? NATURE_TEXT[n.kind](n) : n.kind;
-  if (n.kind !== 'marginal') {
-    text += n.turn == null
-      ? ' A quick look (depth 1–' + puzzle.trace.depth + ') never sees the difference within the line.'
-      : n.turn === 0
-        ? ` A quick look already sees the damage on your very next turn, after ${n.move}.`
-        : ` A quick look only sees the damage after ${n.move}, ${n.turn + 1} of your turns later.`;
+// Three short answers: what it costs, how hard it is to spot, what got worse.
+function wrongRows() {
+  const n = puzzle.nature, T = puzzle.trace;
+  if (n.kind === 'marginal') {
+    return [['Cost', `Barely a mistake: the engine rates your move only ${puzzle.scores[puzzle.played]}cp worse than the best.`]];
   }
-  $('wrong-text').textContent = text + whatChanged();
-  drawTrace();
-  $('wrong-note').textContent = `Red: your move then the engine's punishment. Green: the best line. Solid: quick-look eval (median of depths 1–${puzzle.trace.depth}) at each of your turns. Dashed: deep eval. Ring: a quick look first sees the damage. Dotted square: from here material stays lost. Click a point to see that position.`;
-  box.hidden = false;
+  const cost = {
+    positional: `No material lost in the next ${moves(T.punish.length)}. Your position just got worse.`,
+    positional_then_material: `Nothing at first, but from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
+    concrete: `Material, quickly: from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
+  }[n.kind] || n.kind;
+  const spot = n.turn == null
+    ? `Hard: a quick engine search (depth 1–${T.depth}) never notices it in this line.`
+    : n.turn === 0
+      ? `Easy: a quick engine search already sees it after ${n.move}.`
+      : `Hard: a quick engine search only notices it after ${n.move}, ${moves(n.turn + 1)} later.`;
+  const rows = [['Cost', cost], ['To spot', spot]];
+  const w = worsened();
+  if (w) rows.push(['Got worse', w]);
+  return rows;
 }
 
 // Classical (non-NNUE) eval terms: which positional factors the move gave away.
 // Only shown when that eval agrees and accounts for a real share of the loss: on a sample it
 // contradicted the main engine about a third of the time.
 const TERM_NAMES = { 'King safety': 'king safety', Mobility: 'piece mobility', Threats: 'threats', Passed: 'passed pawns', Pawns: 'pawn structure', Bishops: 'bishops', Knights: 'knights', Rooks: 'rooks', Queens: 'queen', Space: 'space' };
-function whatChanged() {
+function worsened() {
   const c = puzzle.changed;
-  if (!c || puzzle.nature.kind === 'marginal') return '';
-  if (!c.turns.length) return ' What changed: no quiet position to compare in your turns 2–4.';
-  if (!c.explains || !c.terms.length) {
-    return ' What changed: Stockfish\'s old hand-written evaluation doesn\'t clearly explain this one'
-      + (c.total <= 0 ? ' (it even prefers your move there).' : '.');
+  if (!c || !c.turns.length || !c.explains || !c.terms.length) return '';
+  const names = c.terms.slice(0, 3).map(([k]) => TERM_NAMES[k] || k);
+  return names.join(', ').replace(/^./, (s) => s.toUpperCase()) + '.';
+}
+
+function showWrong() {
+  const box = $('wrong');
+  if (!isStrategy() || !puzzle.trace || !puzzle.nature) { box.hidden = true; return; }
+  const dl = $('wrong-text');
+  dl.textContent = '';
+  for (const [k, v] of wrongRows()) {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = k; dd.textContent = v;
+    dl.append(dt, dd);
   }
-  const list = c.terms.slice(0, 3).map(([k, v]) => `${TERM_NAMES[k] || k} −${v.toFixed(2)}`).join(', ');
-  return ` What changed (old hand-written Stockfish eval, your turns ${c.turns.join(', ')}): ${list}.`;
+  const c = puzzle.changed;
+  if (c && c.explains && c.terms.length) {
+    dl.lastChild.title = `Stockfish's classical eval, your moves ${c.turns.join(', ')}: `
+      + c.terms.slice(0, 3).map(([k, v]) => `${TERM_NAMES[k] || k} −${v.toFixed(2)}`).join(', ');
+  }
+  drawTrace();
+  $('wrong-note').textContent = `Quick-search eval after each of your next moves. Red: after your move. Green: after the best move. Ring: where a quick search first notices. Click a dot to see that position. Quick searches are noisy mid-exchange, so spikes can mislead.`;
+  box.hidden = false;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -427,7 +609,7 @@ function drawTrace() {
   const W = 260, H = 130, L = 30, R = 6, TOP = 8, B = 18;
   const n = Math.max(T.punish.length, T.best.length);
   const clamp = (v) => Math.max(-600, Math.min(600, v));
-  const all = [...T.punish, ...T.best, T.deepPunish, T.deepBest].map(clamp);
+  const all = [...T.punish, ...T.best].map(clamp);
   let lo = Math.min(...all), hi = Math.max(...all);
   if (hi - lo < 100) { hi += 50; lo -= 50; }
   const x = (t) => L + (n <= 1 ? 0 : (t * (W - L - R)) / (n - 1));
@@ -450,29 +632,24 @@ function drawTrace() {
     svg.append(lab);
   }
   const series = [
-    { vals: T.best, deep: T.deepBest, color: green, line: puzzle.line, name: 'best line' },
-    { vals: T.punish, deep: T.deepPunish, color: red, line: puzzle.punish, name: 'punishment' },
+    { vals: T.best, color: green, line: puzzle.line, name: 'best line' },
+    { vals: T.punish, color: red, line: puzzle.punish, name: 'punishment' },
   ];
   for (const s of series) {
-    svg.append(svgEl('line', { x1: L, x2: W - R, y1: y(s.deep), y2: y(s.deep), stroke: s.color, 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0.7 }));
     svg.append(svgEl('polyline', { points: s.vals.map((v, t) => `${x(t)},${y(v)}`).join(' '), fill: 'none', stroke: s.color, 'stroke-width': 1.8 }));
     s.vals.forEach((v, t) => {
       const c = svgEl('circle', { cx: x(t), cy: y(v), r: 3.5, fill: s.color, class: 'pt' });
       const tip = svgEl('title', {});
-      tip.textContent = `${s.name}, your turn ${t + 1}: ${fmtEval(v)}`;
+      tip.textContent = `${s.name}, your move ${t + 1}: ${fmtEval(v)}`;
       c.append(tip);
       c.addEventListener('click', () => showLine(s.line, T.plies[t] ?? 2 * t + 1, false, s.name));
       svg.append(c);
     });
   }
-  // Ring: where a quick look first sees the damage. Square: from where material stays lost.
+  // Ring: where a quick search first notices.
   const crit = puzzle.nature.turn;
   if (crit != null && puzzle.nature.kind !== 'marginal') {
     svg.append(svgEl('circle', { cx: x(crit), cy: y(T.punish[crit]), r: 7, fill: 'none', stroke: red, 'stroke-width': 1.5 }));
-  }
-  const mt = puzzle.nature.matTurn;
-  if (mt != null) {
-    svg.append(svgEl('rect', { x: x(mt) - 6, y: y(T.punish[mt]) - 6, width: 12, height: 12, fill: 'none', stroke: red, 'stroke-width': 1.2, 'stroke-dasharray': '2 2' }));
   }
   host.append(svg);
 }
@@ -595,7 +772,10 @@ function submit() {
   const i = state.index;
   if (isStrategy()) {
     if (verdict.ok) {
-      if (!state.results[i]) state.results[i] = mistakes || usedHelp ? 'helped' : 'clean';
+      if (!state.results[i]) {
+        state.results[i] = mistakes || usedHelp ? 'helped' : 'clean';
+        recordTime(state.results[i]);
+      }
       saveState();
       const extra = verdict.loss <= 10 ? "the engine's choice." : `only ${verdict.loss}cp worse than the best.`;
       setStatus(`${verdict.label}! ${verdict.san} \u2014 ${extra}`, 'good');
@@ -683,7 +863,10 @@ function hint() {
 function showSolution() {
   if (busy || solved() || shownSolution) return;
   const i = state.index;
-  if (!state.results[i]) state.results[i] = 'revealed';
+  if (!state.results[i]) {
+    state.results[i] = 'revealed';
+    if (isStrategy()) recordTime('revealed');
+  }
   saveState();
   while (game.undo());
   busy = true; hints = []; verdict = null;
@@ -819,7 +1002,8 @@ function renderProgress() {
     rowEls.forEach((b, i) => {
       const r = state.results[i];
       b.className = [r || '', i === state.index ? 'current' : ''].join(' ').trim();
-      b.lastChild.textContent = r ? STATUS_LABEL[r] : '';
+      const fb = fbOf(pool().find((x) => x.id === state.ids[i]));
+      b.lastChild.textContent = (fb?.rating ? `${FB_RATING[fb.rating].split(' ')[0]} ` : '') + (r ? STATUS_LABEL[r] : '');
     });
     return;
   }
@@ -882,6 +1066,7 @@ function setMode(m) {
   if (state.results.every(Boolean)) showSummary();
 }
 for (const k of Object.keys(MODES)) $(`mode-${k}`).addEventListener('click', () => mode !== k && setMode(k));
+
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('button')) return;

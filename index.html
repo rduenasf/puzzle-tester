@@ -38,11 +38,18 @@
         <label>What changed <select id="f-changed"></select></label>
         <label>Time <select id="f-tc"></select></label>
         <label>Status <select id="f-status"></select></label>
+        <label>Feedback <select id="f-fb"></select></label>
         <form id="f-go" class="go">
           <label>Go to # <input id="f-num" type="number" min="1" inputmode="numeric"></label>
           <button type="submit">Go</button>
         </form>
         <button id="f-reset" type="button" class="ghost">Reset filters</button>
+      </div>
+      <div class="fb-io">
+        <span id="fb-count" class="count"></span>
+        <button id="fb-export" type="button" class="ghost" title="Download your ratings as JSON for miner/feedback.py">Export feedback</button>
+        <button id="fb-import" type="button" class="ghost" title="Merge ratings from an exported file (e.g. from another device)">Import</button>
+        <input id="fb-file" type="file" accept=".json,application/json" hidden>
       </div>
       <ol id="browser-list" class="browser-list" aria-label="Problems"></ol>
     </details>
@@ -85,13 +92,27 @@
         </details>
         <details id="wrong" class="why" open hidden>
           <summary>What went wrong</summary>
-          <p id="wrong-text" class="wrong-text"></p>
-          <div id="wrong-chart" class="wrong-chart"></div>
+          <dl id="wrong-text" class="wrong-text"></dl>
           <div class="row2">
             <button id="show-punish" type="button">Show punishment</button>
             <button id="show-best" type="button">Show best line</button>
           </div>
-          <p id="wrong-note" class="why-note"></p>
+          <details class="wrong-more">
+            <summary>Eval chart</summary>
+            <div id="wrong-chart" class="wrong-chart"></div>
+            <p id="wrong-note" class="why-note"></p>
+          </details>
+        </details>
+        <details id="fb" class="why fb" open hidden>
+          <summary>Rate this problem <span id="fb-saved" class="count"></span></summary>
+          <div class="fb-verdict" role="group" aria-label="Is this a good problem?">
+            <button type="button" data-v="good" aria-pressed="false">👍 Good</button>
+            <button type="button" data-v="meh" aria-pressed="false">🤷 Meh</button>
+            <button type="button" data-v="bad" aria-pressed="false">👎 Bad</button>
+          </div>
+          <div id="fb-tags" class="fb-tags" role="group" aria-label="Reasons"></div>
+          <textarea id="fb-note" rows="2" placeholder="Note (optional): what makes it good or bad?"></textarea>
+          <p class="why-note">Saved in this browser. Export from the problem list for the miner.</p>
         </details>
       </aside>
     </div>

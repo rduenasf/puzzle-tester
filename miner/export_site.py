@@ -17,6 +17,8 @@ import chess.engine
 
 sys.path.insert(0, os.path.dirname(__file__))
 from stratmine.__main__ import DEFAULT_SF  # noqa: E402
+from addclocks import WORK, add_clocks  # noqa: E402
+from stratmine.clocks import GameIndex  # noqa: E402
 
 MATE_CP = 1000  # cap: any move that walks into / misses a mate counts as a 1000cp loss
 
@@ -49,6 +51,10 @@ def main():
     ap.add_argument("--id-prefix", default="s")
     ap.add_argument("--config", default=None,
                     help="The mining run's *_config.json, exported as <VAR>_CONFIG")
+    ap.add_argument("--pgn", default=",".join(os.path.join(WORK, n) for n in ("chesscom.pgn", "lichess.pgn")),
+                    help="Source PGN file(s) for the game clocks, comma-separated")
+    ap.add_argument("--feedback", default=None,
+                    help="Trainer feedback export(s), comma-separated: problems rated bad are left out")
     ap.add_argument("--depth", type=int, default=16)
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--stockfish", default=next((x for x in DEFAULT_SF if x and os.path.exists(x)), None))
@@ -58,6 +64,12 @@ def main():
     for path in a.csv:
         with open(path, encoding="utf-8") as f:
             rows += list(csv.DictReader(f))
+    if a.feedback:  # leave out problems rated bad in the trainer (same key as app.js: link#fen)
+        from feedback import load as load_feedback
+        bad = {k for k, e in load_feedback(a.feedback.split(",")).items() if e.get("rating") == "bad"}
+        before = len(rows)
+        rows = [r for r in rows if f"{r['game']}#{r['fen']}" not in bad]
+        print(f"feedback: left out {before - len(rows)} problems rated bad ({len(bad)} bad ratings)")
     print(f"scoring {len(rows)} problems at depth {a.depth} (all legal moves)...", flush=True)
     with ThreadPoolExecutor(a.workers) as ex:
         results = list(ex.map(lambda r: score_all(a.stockfish, r["fen"], a.depth), rows))
@@ -113,6 +125,7 @@ def main():
                     "since", "maia_model", "elo_map"]
             f.write(f"export const {a.var}_CONFIG = "
                     + json.dumps({k: cfg.get(k) for k in keep}) + ";\n")
+    add_clocks(a.out, GameIndex([p for p in a.pgn.split(",") if os.path.exists(p)]))
     played_loss = sorted(p["scores"][p["played"]] for p in out)
     print(f"wrote {len(out)} problems -> {a.out}")
     print(f"  best move differs from the mining run in {changed} problems (engine noise)")

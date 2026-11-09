@@ -52,9 +52,9 @@ body {
 /* Wide screens in Review: problem list in a full-height column left of everything else. */
 @media (min-width: 1200px) {
   .app.browsing {
-    max-width: 1340px;
+    max-width: none;
     display: grid;
-    grid-template-columns: minmax(300px, 360px) minmax(0, 940px);
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
     grid-template-rows: auto auto auto auto 1fr; /* header, info, board, controls, footer */
     column-gap: 24px;
     row-gap: 12px;
@@ -72,6 +72,17 @@ body {
   .app.browsing .browser-list .meta { white-space: normal; }
   .app.browsing .filters label { flex: 1 1 140px; }
   .app.browsing .filters select { width: 100%; }
+  /* Board as big as the viewport height allows (minus header/info/controls);
+     the sidebar takes the remaining width, up to a readable cap. */
+  .app.browsing .play {
+    grid-template-columns:
+      min(calc(100vh - 250px), calc(100% - 16px - 280px))
+      minmax(280px, 560px);
+  }
+}
+@media (min-width: 1600px) {
+  .app.browsing { padding-left: 24px; padding-right: 24px; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+  .app.browsing .play { gap: 24px; grid-template-columns: min(calc(100vh - 250px), calc(100% - 24px - 320px)) minmax(320px, 560px); }
 }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -218,12 +229,37 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .why li .na { color: var(--muted); }
 .why li small { color: var(--muted); }
 .why-note { margin: 8px 0 0; color: var(--muted); font-size: 0.8rem; }
-.wrong-text { margin: 8px 0; }
+.wrong-text { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
+.wrong-text dt { font-weight: 600; color: var(--muted); font-size: 0.85em; padding-top: 0.15em; }
+.wrong-text dd { margin: 0; }
+.wrong-more { margin-top: 10px; }
+.wrong-more > summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
 .wrong-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .wrong-chart .pt { cursor: pointer; }
 .wrong-chart .pt:hover { stroke: var(--text); stroke-width: 2; }
 .why .row2 { margin-top: 8px; }
 .why .row2 button { min-height: 36px; padding: 6px 8px; font-size: 0.85rem; }
+
+/* Review feedback */
+.fb-verdict { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.fb-verdict button { min-height: 36px; padding: 6px 4px; font-size: 0.85rem; }
+.fb-verdict button[aria-pressed="true"][data-v="good"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fb-verdict button[aria-pressed="true"][data-v="meh"] { background: var(--warn); border-color: var(--warn); color: #fff; }
+.fb-verdict button[aria-pressed="true"][data-v="bad"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+.fb-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.fb-tags button {
+  min-height: 0; padding: 3px 8px; border-radius: 999px; font-size: 0.78rem; color: var(--muted);
+  background: transparent;
+}
+.fb-tags button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
+.fb textarea {
+  width: 100%; margin-top: 8px; font: inherit; font-size: 0.85rem; color: var(--text);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; resize: vertical;
+}
+.fb-io { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
+.fb-io .count { margin-right: auto; }
+.fb-io button { min-height: 32px; padding: 4px 10px; font-size: 0.82rem; }
+.browser-list .fbm { margin-right: 4px; }
 
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 

@@ -251,6 +251,21 @@ was proposed and deferred in favour of engine-backed evidence.
 The `grade` subcommand (CLI) uses the same labels with CT-Art-style points 3/2/1/0/0 and
 multipv 3 for alternatives.
 
+### 10.1 Feedback loop (added 2026-11-08)
+
+- Review mode has a "Rate this problem" panel: Good / Meh / Bad, reason tags, and a note.
+  Saved in the browser (`localStorage` `review-feedback-v1`); "Export feedback" in the problem
+  list downloads a JSON file, "Import" merges one (newer rating wins), e.g. from the phone.
+- Keyed by game link + FEN, not #number or id, so ratings survive a re-export. Each entry
+  stores a snapshot of the problem's mining values at rating time.
+- Tag keys (`tactical`, `noise`, `deep`, `obvious`, `unclear`, `engine_move`, `decided`,
+  `time`, `wrong_verdict`, `duplicate`, `instructive`, `habit`) are read by
+  `miner/feedback.py`, which maps each to the check it most likely implicates.
+- `feedback.py` reports good/bad rates per category/verdict/time class and, for each mining
+  value, the single cut that drops the most bad for the fewest good. These are fitted on my
+  ratings only: leads to test against the volume table, not thresholds to adopt blindly.
+- `export_site.py --feedback file.json` leaves out problems rated bad.
+
 ## 11. Unverified or open
 
 - Maia-3's Elo scale being Lichess blitz (from the brief, not the source or model card).
@@ -276,3 +291,10 @@ cp work/review.js ../strategic_review.js
 `mine` writes `*_config.json` with the thresholds used. `export_site.py` scores every legal
 move (~40 min for 861 problems); `explain.py` and `whatchanged.py` take a few minutes each.
 After changing site files, bump `VERSION` in `sw.js`.
+
+With ratings exported from the trainer:
+
+```bash
+.venv/Scripts/python.exe feedback.py work/review-feedback-2026-11-08.json --csv work/feedback.csv
+# then add --feedback work/review-feedback-2026-11-08.json to the export_site.py line above
+```
