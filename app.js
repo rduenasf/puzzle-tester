@@ -18,15 +18,17 @@ const MODES = {
 let mode = (() => {
   try { const m = localStorage.getItem(MODE_KEY); return MODES[m] ? m : 'mate'; } catch { return 'mate'; }
 })();
-// Mate mode is split into sections, each with its own random set and progress.
+// Mate mode is split into sections, each with its own progress.
+// Patterns: random sets of 10. Polgár (ordered): every problem, in book order, as one numbered list.
 const SECTION_KEY = 'mate-section';
 const polgar = (n) => POLGAR.filter((p) => p.mate === n);
 const SECTIONS = {
   classic: { pool: PUZZLES, key: 'mate-drills-v1', label: 'Patterns', about: 'Classic mating patterns' },
-  m1: { pool: polgar(1), key: 'mate-polgar-m1-v1', label: 'Mate in 1', about: 'Polgár: mate in one' },
-  m2: { pool: polgar(2), key: 'mate-polgar-m2-v1', label: 'Mate in 2', about: 'Polgár: mate in two' },
-  m3: { pool: polgar(3), key: 'mate-polgar-m3-v1', label: 'Mate in 3', about: 'Polgár: mate in three' },
+  m1: { pool: polgar(1), key: 'mate-polgar-m1-v2', label: 'Mate in 1', about: 'Polgár: mate in one', ordered: true },
+  m2: { pool: polgar(2), key: 'mate-polgar-m2-v2', label: 'Mate in 2', about: 'Polgár: mate in two', ordered: true },
+  m3: { pool: polgar(3), key: 'mate-polgar-m3-v2', label: 'Mate in 3', about: 'Polgár: mate in three', ordered: true },
 };
+const isOrdered = () => mode === 'mate' && !!SECTIONS[section].ordered;
 let section = (() => {
   try { const s = localStorage.getItem(SECTION_KEY); return SECTIONS[s] ? s : 'classic'; } catch { return 'classic'; }
 })();
@@ -103,16 +105,17 @@ function shuffle(a) {
 }
 function newSet() {
   if (isBrowse()) return browseState();
-  const ids = shuffle(pool().map((p) => p.id)).slice(0, SET_SIZE);
+  const all = pool().map((p) => p.id);
+  const ids = isOrdered() ? all : shuffle(all).slice(0, SET_SIZE);
   return { ids, results: Array(ids.length).fill(null), index: 0 };
 }
 function loadState() {
   if (isBrowse()) return browseState();
   try {
     const s = JSON.parse(localStorage.getItem(setKey()));
-    const n = Math.min(SET_SIZE, pool().length);
-    if (s && Array.isArray(s.ids) && s.ids.length === n &&
-        s.ids.every((id) => pool().some((p) => p.id === id))) return s;
+    const n = isOrdered() ? pool().length : Math.min(SET_SIZE, pool().length);
+    const known = new Set(pool().map((p) => p.id));
+    if (s && Array.isArray(s.ids) && s.ids.length === n && s.ids.every((id) => known.has(id))) return s;
   } catch {}
   return null;
 }
@@ -424,7 +427,7 @@ function loadPuzzle(i) {
   timing = false;
   if (isStrategy() && !state.results[i]) timerStart();
   $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}`
-    : mode === 'mate' && section !== 'classic' ? `Puzzle ${i + 1} · ${puzzle.title}` : `Puzzle ${i + 1}`;
+    : isOrdered() ? `Puzzle ${i + 1} of ${state.ids.length} · ${puzzle.title}` : `Puzzle ${i + 1}`;
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
     + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
@@ -901,6 +904,7 @@ function showSummary() {
   const helped = r.filter((x) => x === 'helped').length;
   const revealed = r.filter((x) => x === 'revealed').length;
   $('summary-text').textContent = `${clean} clean · ${helped} with help · ${revealed} revealed — out of ${r.length}.`;
+  $('summary-new').textContent = isOrdered() ? 'Start over from #1' : 'Play a new set';
   $('summary').hidden = false;
 }
 
@@ -1005,19 +1009,54 @@ function renderProgress() {
     });
     return;
   }
-  ol.textContent = '';
-  state.ids.forEach((_, i) => {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = i + 1;
-    b.className = [state.results[i] || '', i === state.index ? 'current' : ''].join(' ').trim();
-    b.setAttribute('aria-label', `Puzzle ${i + 1}${state.results[i] ? `, ${state.results[i]}` : ''}`);
-    b.addEventListener('click', () => !busy && loadPuzzle(i));
-    li.appendChild(b);
-    ol.appendChild(li);
+  ol.classList.toggle('long', isOrdered());
+  // Build the buttons once per set (Polgár sections have thousands), then only update classes.
+  if (progIds !== state.ids) {
+    progIds = state.ids;
+    progIndex = -1;
+    ol.textContent = '';
+    progEls = state.ids.map((_, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = i + 1;
+      b.addEventListener('click', () => !busy && loadPuzzle(i));
+      li.appendChild(b);
+      ol.appendChild(li);
+      return b;
+    });
+  }
+  progEls.forEach((b, i) => {
+    const r = state.results[i];
+    const cls = [r || '', i === state.index ? 'current' : ''].join(' ').trim();
+    if (b.className !== cls) b.className = cls;
+    b.setAttribute('aria-label', `Puzzle ${i + 1}${r ? `, ${r}` : ''}`);
   });
+  if (progIndex !== state.index) {  // keep the current number visible inside the scrolling grid
+    progIndex = state.index;
+    const b = progEls[state.index];
+    if (b && ol.scrollHeight > ol.clientHeight) {
+      const top = b.offsetTop, h = b.offsetHeight; // .progress.long is positioned, so this is relative to it
+      if (top < ol.scrollTop || top + h > ol.scrollTop + ol.clientHeight) ol.scrollTop = top - (ol.clientHeight - h) / 2;
+    }
+  }
+  const meta = $('progress-meta');
+  meta.hidden = !isOrdered();
+  if (isOrdered()) {
+    const done = state.results.filter(Boolean).length;
+    $('progress-count').textContent = `${done} / ${state.results.length} done`;
+    $('next-unsolved').disabled = done === state.results.length;
+  }
 }
+let progEls = [], progIds = null, progIndex = -1;
+$('next-unsolved').addEventListener('click', () => {
+  if (busy) return;
+  const n = state.results.length;
+  for (let k = 1; k <= n; k++) {  // first unsolved after the current one, wrapping around
+    const i = (state.index + k) % n;
+    if (!state.results[i]) { loadPuzzle(i); return; }
+  }
+});
 
 // ---------- board (Chessground: drag/tap moves, right-click arrows & circles) ----------
 const cg = Chessground(boardEl, {
@@ -1063,7 +1102,7 @@ function setMode(m) {
   $('app-title').textContent = MODES[m].title;
   document.title = MODES[m].title;
   for (const k of Object.keys(MODES)) $(`mode-${k}`).setAttribute('aria-pressed', String(m === k));
-  $('new-set').hidden = isBrowse();
+  $('new-set').hidden = isBrowse() || isOrdered();
   $('sections').hidden = m !== 'mate';
   document.querySelector('.app').classList.toggle('browsing', isBrowse());
   if (isBrowse()) { loadStore(); fillFilters(); }

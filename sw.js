@@ -1,5 +1,5 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v18';
+const VERSION = 'v19';
 const CACHE = `mate-drills-${VERSION}`;
 const ASSETS = [
   './',
