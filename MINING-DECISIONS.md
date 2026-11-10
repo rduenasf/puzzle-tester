@@ -292,6 +292,10 @@ cp work/review.js ../strategic_review.js
 move (~40 min for 861 problems); `explain.py` and `whatchanged.py` take a few minutes each.
 After changing site files, bump `VERSION` in `sw.js`.
 
+`mine` also reports Maia p(best) at a fixed 2600 Elo (`--elo-top`, info only, not a check).
+For an export made before that existed, `addtop.py ../strategic_review.js --csv work/v4_problems.csv`
+fills it in (Maia only, about a minute).
+
 With ratings exported from the trainer:
 
 ```bash

@@ -95,6 +95,8 @@ def main():
             "pPlayed": float(r["p_my"]),
             "pBest": float(r["p_best"]),
             "pBestPlus": float(r["p_best_plus"]),
+            # p(best) at a fixed strong Elo (--elo-top); missing in runs before it existed
+            **({"pBestTop": float(r["p_best_top"])} if r.get("p_best_top") not in (None, "") else {}),
             "minedBest": mined_best,
             "timeControl": r.get("time_control", ""),
             # Values of each mining check (from the mining run, not the re-score above)
@@ -121,7 +123,7 @@ def main():
             keep = ["depth", "skip_plies", "cp_min", "cp_max", "max_eval", "forcing_plies",
                     "max_forcing", "quiet_above", "max_material_lost", "shallow_depth",
                     "shallow_multipv", "p_best_min", "p_best_max", "elo_delta",
-                    "p_best_strong_min", "p_gain_min", "natural", "typical", "easy_miss",
+                    "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
                     "since", "maia_model", "elo_map"]
             f.write(f"export const {a.var}_CONFIG = "
                     + json.dumps({k: cfg.get(k) for k in keep}) + ";\n")

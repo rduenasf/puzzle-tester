@@ -231,7 +231,7 @@ function fbSnapshot(p) {
     id: p.id, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
     played: p.played, minedBest: p.minedBest, best: p.line[0],
     kind: p.kind, timeClass: p.timeClass, timeControl: p.timeControl, maiaElo: p.maiaElo,
-    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, checks: p.checks,
+    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, checks: p.checks,
     playedLossNow: p.scores[p.played] ?? null,
     nature: p.nature?.kind ?? null,
     changedTop: p.changed?.explains && p.changed.terms.length ? p.changed.terms[0][0] : null,
@@ -801,7 +801,10 @@ function showWhy(finished) {
     : puzzle.pBest < lo ? 'below the range: allowed because your move was Maia\'s #1'
     : 'in range';
   add('ok', `Maia p(best) at your Elo (${puzzle.maiaElo}): ${pct(puzzle.pBest)}`, `(range ${lo}–${hi}%, ${why})`);
-  add('ok', `Maia p(best) at +${C.elo_delta} Elo: ${pct(puzzle.pBestPlus)}`, `(min ${100 * C.p_best_strong_min}%)`);
+  add('ok', `Maia p(best) at +${C.elo_delta} Elo (${puzzle.maiaElo + C.elo_delta}): ${pct(puzzle.pBestPlus)}`, `(min ${100 * C.p_best_strong_min}%)`);
+  if (puzzle.pBestTop != null) {
+    add('na', `Maia p(best) at ${C.elo_top || 2600} Elo: ${pct(puzzle.pBestTop)}`, '(info, not a check)');
+  }
   add('na', `Your move: Maia ${pct(puzzle.pPlayed)}, #${K.myRank} at your Elo`, '(info, not a check)');
   const off = [];
   if (!C.natural) off.push('p(your move) ≥ p(best)');

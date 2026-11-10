@@ -205,9 +205,11 @@ def mine(a, sf, maia):
                 rec["shallow_rank"] = next((i + 1 for i, l in enumerate(sh)
                                             if l.pv and l.pv[0] == rec["best"]), None)
                 hist = boards[max(0, rec["ply"] - 7): rec["ply"] + 1]
-                p_lo, p_hi = maia.policy(hist, [my_elo, my_elo + a.elo_delta], opp_elo)
+                p_lo, p_hi, p_top = maia.policy(hist, [my_elo, my_elo + a.elo_delta, a.elo_top],
+                                                opp_elo)
                 rec.update(p_best=p_lo.get(rec["best"], 0.0), p_my=p_lo.get(rec["move"], 0.0),
-                           p_best_hi=p_hi.get(rec["best"], 0.0), p_my_hi=p_hi.get(rec["move"], 0.0))
+                           p_best_hi=p_hi.get(rec["best"], 0.0), p_my_hi=p_hi.get(rec["move"], 0.0),
+                           p_best_top=p_top.get(rec["best"], 0.0))  # info only, not a check
                 # 1 = my move was Maia's top prediction at my Elo
                 rec["my_rank"] = 1 + sum(p > rec["p_my"] for p in p_lo.values())
             r = {
@@ -332,6 +334,7 @@ def write_outputs(a, problems):
                 "p_my": fmt_p(rec["p_my"]), "maia_rank_my": rec["my_rank"],
                 "p_best": fmt_p(rec["p_best"]),
                 "p_best_plus": fmt_p(rec["p_best_hi"]), "p_my_plus": fmt_p(rec["p_my_hi"]),
+                "p_best_top": fmt_p(rec["p_best_top"]),
                 "forcing_in_line": rec["forcing"], "forcing_in_punishment": rec["ref_forcing"],
                 "material_lost": rec["material_lost"],
                 "shallow_rank": rec["shallow_rank"],

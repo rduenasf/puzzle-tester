@@ -75,6 +75,8 @@ def main(argv=None):
     m.add_argument("--p-best-max", type=float, default=0.65)
     m.add_argument("--elo-delta", type=int, default=500,
                    help="Stronger-player Elo offset for --p-best-strong-min (and --p-gain-min)")
+    m.add_argument("--elo-top", type=int, default=2600,
+                   help="Fixed strong Elo whose Maia p(best) is reported (info, not a check)")
     m.add_argument("--p-best-strong-min", type=float, default=0.10,
                    help="Min Maia p(best) at my Elo + elo-delta")
     m.add_argument("--p-gain-min", type=float, default=None,
