@@ -45,6 +45,7 @@
         <label>Time <select id="f-tc"></select></label>
         <label>Status <select id="f-status"></select></label>
         <label>Feedback <select id="f-fb"></select></label>
+        <label>Favorites <select id="f-fav"></select></label>
         <form id="f-go" class="go">
           <label>Go to # <input id="f-num" type="number" min="1" inputmode="numeric"></label>
           <button type="submit">Go</button>
@@ -66,6 +67,7 @@
         <div id="subtitle" class="subtitle"></div>
       </div>
       <div class="info-side">
+        <button id="fav" type="button" class="ghost small fav" aria-pressed="false" title="Favorite this problem for later analysis" hidden>☆ Favorite</button>
         <button id="copy-fen" type="button" class="ghost small" title="Copy this puzzle's starting position as FEN">Copy FEN</button>
         <div id="turn" class="turn" aria-hidden="true"></div>
       </div>

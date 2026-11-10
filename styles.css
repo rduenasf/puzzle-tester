@@ -288,3 +288,4 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 @media (prefers-reduced-motion: reduce) {
   .board.shake { animation: none; }
 }
+.fav[aria-pressed="true"] { color: var(--warn); border-color: var(--warn); }
