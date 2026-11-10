@@ -91,7 +91,7 @@
 
     <section class="info">
       <div>
-        <div id="title" class="title"></div>
+        <div class="title-row"><span id="title" class="title"></span><span id="kind" class="kind" tabindex="0" hidden></span></div>
         <div id="subtitle" class="subtitle"></div>
       </div>
       <div class="info-side">
@@ -104,7 +104,10 @@
 
     <div class="play">
       <div class="board-col">
-        <div class="board-frame"><div id="board" class="board" aria-label="Chessboard"></div></div>
+        <div class="board-row">
+          <div id="evalbar" class="evalbar" hidden role="img" aria-label="Engine evaluation"><div class="evalbar-fill"></div><span class="evalbar-num"></span></div>
+          <div class="board-frame"><div id="board" class="board" aria-label="Chessboard"></div></div>
+        </div>
         <p id="status" class="status" role="status" aria-live="polite"></p>
         <p id="detail" class="detail" hidden></p>
       </div>
@@ -152,6 +155,7 @@
               </select>
             </label>
             <label id="spar-maia-wrap" hidden>Rating <select id="spar-maia"></select></label>
+            <label class="spar-check" title="Full-strength Stockfish's view of the position on the board"><input type="checkbox" id="spar-eval"> Show eval bar</label>
           </div>
           <div class="row2">
             <button id="spar-start" type="button" class="primary">Play from here</button>

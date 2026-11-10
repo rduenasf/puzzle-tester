@@ -470,6 +470,13 @@ function loadPuzzle(i) {
   if (isStrategy() && !state.results[i]) timerStart();
   $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}`
     : isOrdered() ? `Puzzle ${i + 1} of ${state.ids.length} · ${puzzle.title}` : `Puzzle ${i + 1}`;
+  // Category badge next to the title; its description is the hover tooltip.
+  const kindText = isStrategy() && puzzle.kind ? KIND_TEXT[puzzle.kind] || puzzle.kind : '';
+  $('kind').hidden = !kindText;
+  $('kind').textContent = kindText ? KIND_LABEL[puzzle.kind] || puzzle.kind : '';
+  const tip = kindText.replace(/^[^:]+:\s*/, '');
+  $('kind').title = tip.charAt(0).toUpperCase() + tip.slice(1);
+  $('kind').setAttribute('aria-label', kindText);
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
     + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
@@ -1036,6 +1043,7 @@ function render() {
   if (fen !== shownFen) { cfg.fen = fen; shownFen = fen; }
   cg.set(cfg);
   cg.setAutoShapes(back ? [] : hints);
+  renderEvalBar(pos, cfg.orientation);
 
   renderMoves(hist, at);
   $('nav-first').disabled = $('nav-back').disabled = busy || at === 0;
@@ -1167,6 +1175,24 @@ const cg = Chessground(boardEl, {
   drawable: { enabled: true, visible: true, eraseOnClick: true },
 });
 new ResizeObserver(() => cg.redrawAll()).observe(boardEl);
+// Size the board ourselves to a whole number of device pixels per 8 squares. Chessground
+// rounds its squares down to that anyway, and a board any wider shows a strip of empty frame
+// on the right and bottom. The eval bar, when shown, takes its width from the same column.
+const boardCol = boardEl.closest('.board-col');
+const frameEl = boardEl.closest('.board-frame');
+function fitBoard() {
+  const bar = $('evalbar');
+  const avail = boardCol.clientWidth - (bar.hidden ? 0 : bar.offsetWidth);
+  const dpr = window.devicePixelRatio || 1;
+  const px = Math.floor((avail * dpr) / 8) * 8;
+  if (px <= 0) return;
+  // The board gets half a device pixel extra so layout rounding can't push Chessground's own
+  // floor() down a whole step; the frame clips it to the exact size.
+  frameEl.style.width = frameEl.style.height = `${px / dpr}px`;
+  boardEl.style.width = boardEl.style.height = `${(px + 0.5) / dpr}px`;
+}
+new ResizeObserver(fitBoard).observe(boardCol);
+fitBoard();
 // Chessground caches where the board is on screen and only refreshes that on resize or
 // scroll. Content above the board (e.g. the long number grid of a Polgár section) can move
 // it without either, and then clicks land on the wrong squares: re-measure on every press.
@@ -1179,7 +1205,7 @@ for (const ev of ['mousedown', 'touchstart']) {
 // "Back to the puzzle" restores the line you had entered.
 const SPAR_KEY = 'spar-settings-v1';
 const sparCfg = (() => {
-  const d = { engine: 'sf', sf: '', maia: '' };
+  const d = { engine: 'sf', sf: '', maia: '', evalbar: false };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SPAR_KEY)) }; } catch { return d; }
 })();
 let spar = null; // { me: 'w'|'b', start: ply count, saved: { line, verdict, hints }, thinking, token, note }
@@ -1196,6 +1222,59 @@ function fmtScore(score, turn) {
   if (!score) return '?';
   const s = turn === 'w' ? 1 : -1;
   return score.mate != null ? `#${s * score.mate}` : fmtEval(s * score.cp);
+}
+
+// ---------- eval bar (while playing the engine) ----------
+// Its own full-strength Stockfish, so a weakened opponent doesn't weaken the evals.
+// One search at a time; when it ends, the latest position asked for is searched next.
+const evalSf = () => (engines.evalSf ??= new Stockfish());
+const evalState = { want: null, running: false, shown: null };
+// Lichess' cp -> win chance curve, as White's share of the bar (0..100).
+const whiteShare = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+function setEvalBar(share, label) {
+  const bar = $('evalbar');
+  bar.querySelector('.evalbar-fill').style.height = `${share}%`;
+  const num = bar.querySelector('.evalbar-num');
+  num.textContent = label;
+  num.className = `evalbar-num ${share >= 50 ? 'w' : 'b'}`;
+  bar.title = `Eval ${label} (+ White is better, − Black is better)`;
+}
+function renderEvalBar(pos, orientation) {
+  const bar = $('evalbar');
+  const on = !!spar && sparCfg.evalbar;
+  if (bar.hidden === on) { bar.hidden = !on; fitBoard(); }
+  if (!on) { evalState.want = null; return; }
+  bar.classList.toggle('flipped', orientation === 'black');
+  const fen = pos.fen();
+  if (evalState.shown === fen) return;
+  const over = (share, label) => { evalState.want = null; evalState.shown = fen; bar.classList.remove('stale'); setEvalBar(share, label); };
+  if (pos.isCheckmate()) { over(pos.turn() === 'w' ? 0 : 100, pos.turn() === 'w' ? '0-1' : '1-0'); return; }
+  if (pos.isGameOver()) { over(50, '½'); return; }
+  bar.classList.add('stale');
+  if (evalState.want === fen) return;
+  evalState.want = fen;
+  if (!evalState.running) runEval();
+}
+async function runEval() {
+  const fen = evalState.want;
+  if (!fen) return;
+  evalState.running = true;
+  let r = null;
+  try { r = await evalSf().search(fen, { movetime: 1000 }); } catch {}
+  evalState.running = false;
+  if (evalState.want !== fen) { runEval(); return; } // moved on meanwhile: search the newest
+  evalState.want = null;
+  if (!r?.score) return;
+  const s = fen.split(' ')[1] === 'w' ? 1 : -1;
+  const { cp, mate } = r.score;
+  const share = mate != null ? (s * mate > 0 ? 100 : 0) : whiteShare(s * cp);
+  // Signed from White's side: + White is better, − Black is better.
+  const v = mate != null ? s * mate : s * cp;
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  const label = mate != null ? `${sign}M${Math.abs(mate)}` : `${sign}${(Math.abs(v) / 100).toFixed(1)}`;
+  evalState.shown = fen;
+  $('evalbar').classList.remove('stale');
+  setEvalBar(share, label);
 }
 
 function startSpar(me) {
@@ -1216,6 +1295,9 @@ function endSpar() {
   if (!spar) return;
   spar = null; sparToken++;
   engines.sf?.stop();
+  evalState.want = null; evalState.shown = null; engines.evalSf?.stop();
+  $('evalbar').hidden = true;
+  fitBoard();
 }
 // Leave and put back the line that was on the board before.
 function stopSpar() {
@@ -1322,6 +1404,7 @@ function renderSpar() {
   const auto = $('spar-maia').options[0];
   auto.textContent = puzzle?.maiaElo ? `Your rating (${puzzle.maiaElo})` : 'Default (1500)';
   $('spar-maia').value = sparCfg.maia;
+  $('spar-eval').checked = sparCfg.evalbar;
   if (!on) {
     $('spar-info').textContent = sparCfg.engine === 'maia' && !engines.maia?.ready
       ? `Maia plays like a human at the chosen rating. The first game downloads it (${MAIA_MB} MB); after that it works offline.`
@@ -1339,6 +1422,11 @@ const saveSparCfg = () => { try { localStorage.setItem(SPAR_KEY, JSON.stringify(
 $('spar-engine').addEventListener('change', (e) => { sparCfg.engine = e.target.value; saveSparCfg(); renderSpar(); });
 $('spar-sf').addEventListener('change', (e) => { sparCfg.sf = e.target.value; saveSparCfg(); });
 $('spar-maia').addEventListener('change', (e) => { sparCfg.maia = e.target.value; saveSparCfg(); });
+$('spar-eval').addEventListener('change', (e) => {
+  sparCfg.evalbar = e.target.checked; saveSparCfg();
+  if (!sparCfg.evalbar) { evalState.want = null; engines.evalSf?.stop(); }
+  render();
+});
 $('spar-start').addEventListener('click', () => startSpar(player));
 $('spar-swap').addEventListener('click', () => {
   if (!spar) { startSpar(player === 'w' ? 'b' : 'w'); return; }

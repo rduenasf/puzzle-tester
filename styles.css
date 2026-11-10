@@ -236,6 +236,13 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .info-side { display: flex; align-items: center; gap: 10px; flex: none; }
 button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 .title { font-weight: 650; font-size: 1.1rem; }
+.title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kind {
+  font-size: 0.78rem; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px; cursor: help; white-space: nowrap;
+}
+.kind[hidden] { display: none; }
 .subtitle { color: var(--muted); font-size: 0.95rem; }
 .turn {
   width: 28px; height: 28px; border-radius: 50%;
@@ -282,19 +289,42 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .mv.no::after { content: " ✗"; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .help button { min-height: 38px; font-size: 0.9rem; color: var(--muted); }
-.board-frame {
-  width: 100%;
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+/* Bar and board form one block with one shadow; app.js sizes the board (see fitBoard). */
+.board-row {
+  display: flex; align-items: stretch; align-self: flex-start; max-width: 100%;
+  border-radius: 4px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
 }
+.evalbar { position: relative; flex: 0 0 30px; overflow: hidden; background: #403a35; }
+.evalbar[hidden] { display: none; }
+.evalbar-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+  background: #f4f1ec; transition: height 0.4s ease;
+}
+.evalbar.flipped .evalbar-fill { bottom: auto; top: 0; }
+.evalbar.stale .evalbar-num { opacity: 0.5; }
+.evalbar-num {
+  position: absolute; left: 0; right: 0; text-align: center;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.3px;
+  line-height: 1; padding: 4px 0; white-space: nowrap; z-index: 1;
+}
+.evalbar-num.w { bottom: 0; color: #2b2622; }
+.evalbar-num.b { top: 0; color: #f4f1ec; }
+.evalbar.flipped .evalbar-num.w { bottom: auto; top: 0; }
+.evalbar.flipped .evalbar-num.b { top: auto; bottom: 0; }
+.board-frame { flex: 0 0 auto; overflow: hidden; }
 .board {
   width: 100%;
   aspect-ratio: 1;
   touch-action: none;
 }
-/* keep Chessground's coordinates readable inside the board */
+/* Coordinates inside the edge squares: rank numbers top-left on the a-file (h-file when
+   flipped), file letters bottom-right on the first rank. Chessground's default offsets
+   (left: 24px, top: -20px) only line up at one board size. */
 .cg-wrap coords { font-size: clamp(8px, 2.2vw, 11px); font-weight: 600; }
+.cg-wrap coords.ranks { left: 0; top: 0; width: auto; }
+.cg-wrap coords.ranks coord { transform: none; padding: 2px 0 0 3px; line-height: 1; }
+.cg-wrap coords.files { left: 0; bottom: 0; height: auto; }
+.cg-wrap coords.files coord { text-align: right; padding: 0 3px 2px 0; line-height: 1; }
 
 .board.shake { animation: shake 0.35s; }
 @keyframes shake {
@@ -364,6 +394,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface); width: 100%;
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 34px;
 }
+.spar-opts label.spar-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
 #spar-stop { width: 100%; margin-top: 8px; min-height: 36px; font-size: 0.85rem; }
 .why .row2 { margin-top: 8px; }
 .why .row2 button { min-height: 36px; padding: 6px 8px; font-size: 0.85rem; }
