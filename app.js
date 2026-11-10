@@ -1200,10 +1200,12 @@ function fmtScore(score, turn) {
 
 function startSpar(me) {
   if (busy) return;
-  spar = {
-    me, start: plies(), thinking: false, token: ++sparToken, note: '',
-    saved: { line: game.history({ verbose: true }).map(uci), verdict, hints },
-  };
+  const at = viewPly();
+  const saved = { line: game.history({ verbose: true }).map(uci), verdict, hints };
+  // Play from the position being looked at, not the end of the line; Stop puts the whole line back.
+  while (plies() > at) game.undo();
+  view = null;
+  spar = { me, start: plies(), thinking: false, token: ++sparToken, note: '', saved };
   verdict = null; hints = [];
   setDetail('');
   renderSpar();
