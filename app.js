@@ -1076,6 +1076,12 @@ const cg = Chessground(boardEl, {
   drawable: { enabled: true, visible: true, eraseOnClick: true },
 });
 new ResizeObserver(() => cg.redrawAll()).observe(boardEl);
+// Chessground caches where the board is on screen and only refreshes that on resize or
+// scroll. Content above the board (e.g. the long number grid of a Polgár section) can move
+// it without either, and then clicks land on the wrong squares: re-measure on every press.
+for (const ev of ['mousedown', 'touchstart']) {
+  boardEl.addEventListener(ev, () => cg.state.dom.bounds.clear(), { capture: true, passive: true });
+}
 
 // ---------- play it out vs an engine (Stockfish or Maia) ----------
 // From whatever is on the board, you play one side and the engine the other.
