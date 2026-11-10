@@ -68,32 +68,132 @@ body {
     position: sticky;
     top: 12px;
   }
-  .app.browsing .browser-list { max-height: calc(100vh - 330px); }
+  /* Panel never taller than the viewport; the list takes whatever the filters leave.
+     A <details> wraps its body in ::details-content, so that wrapper is the flex item. */
+  .app.browsing .browser-list { max-height: calc(100vh - 420px); } /* fallback */
+  @supports selector(::details-content) {
+    .app.browsing > .browser[open] {
+      display: flex; flex-direction: column;
+      /* 12px sticky top + 16px page bottom padding */
+      max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px);
+    }
+    .app.browsing > .browser::details-content {
+      display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+    }
+    .app.browsing .browser-list { flex: 1 1 auto; min-height: 120px; max-height: none; }
+  }
   .app.browsing .browser-list .meta { white-space: normal; }
   .app.browsing .filters label { flex: 1 1 140px; }
   .app.browsing .filters select { width: 100%; }
-  /* Board as big as the viewport height allows (minus header/info/controls);
-     the sidebar takes the remaining width, up to a readable cap. */
+  /* Board as big as the viewport height allows (minus header, info, status, controls and footer),
+     so the whole page fits without scrolling; the side panel takes the remaining width, up to a cap. */
   .app.browsing .play {
     grid-template-columns:
-      min(calc(100vh - 250px), calc(100% - 16px - 280px))
+      min(calc(100vh - 290px), calc(100% - 16px - 280px))
       minmax(280px, 560px);
+    align-items: stretch;
   }
+  /* Side panel is exactly as tall as the board column and scrolls inside:
+     height 0 keeps it out of the row's sizing, min-height 100% fills the row. */
+  .app.browsing .panel { height: 0; min-height: 100%; overflow-y: auto; }
+  .app.browsing .panel > * { flex: none; }
+  /* title row spans just the board, so its buttons sit over the board's right edge */
+  .app.browsing .info { width: min(calc(100vh - 290px), calc(100% - 16px - 280px)); }
 }
 @media (min-width: 1600px) {
   .app.browsing { padding-left: 24px; padding-right: 24px; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
-  .app.browsing .play { gap: 24px; grid-template-columns: min(calc(100vh - 250px), calc(100% - 24px - 320px)) minmax(320px, 560px); }
+  .app.browsing .play { gap: 24px; grid-template-columns: min(calc(100vh - 290px), calc(100% - 24px - 320px)) minmax(320px, 560px); }
+  .app.browsing .info { width: min(calc(100vh - 290px), calc(100% - 24px - 320px)); }
 }
 
-.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.top-actions { display: flex; align-items: center; gap: 8px; }
-.modes { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.modes button { border: 0; border-radius: 0; padding: 8px 12px; min-height: 40px; background: transparent; }
-.modes button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
-.sections { align-self: flex-start; max-width: 100%; overflow-x: auto; }
-.sections[hidden] { display: none; }
-.sections button { white-space: nowrap; }
+.top { display: flex; align-items: center; gap: 8px; }
+.top h1 { flex: 1; min-width: 0; }
 h1 { font-size: 1.35rem; margin: 0; letter-spacing: 0.01em; }
+
+/* ---------- left menu (collapsible; a drawer on phones) ---------- */
+:root {
+  --nav-w: 208px;
+  --nav-w-collapsed: 64px;
+  --nav-bg: #262421;
+  --nav-text: #d6d0c8;
+  --nav-muted: #8f877e;
+  --nav-hover: #33302c;
+  --nav-active: #3d3934;
+}
+html.nav-collapsed { --nav-w: var(--nav-w-collapsed); }
+body { padding-left: var(--nav-w); }
+.sidenav {
+  position: fixed; inset: 0 auto 0 0; z-index: 30;
+  width: var(--nav-w);
+  background: var(--nav-bg); color: var(--nav-text);
+  display: flex; flex-direction: column; gap: 4px;
+  padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom));
+}
+.sidenav ul { list-style: none; margin: 0; padding: 0; }
+.nav-list { flex: 1; display: grid; align-content: start; gap: 2px; }
+.nav-brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; }
+.nav-brand img { flex: none; border-radius: 6px; }
+.nav-item {
+  width: 100%; min-height: 44px; padding: 8px 12px;
+  display: flex; align-items: center; gap: 12px;
+  border: 0; border-radius: 8px; background: transparent; color: inherit;
+  font-weight: 600; text-align: left; white-space: nowrap; overflow: hidden;
+}
+.nav-item:hover:not(:disabled) { background: var(--nav-hover); color: #fff; }
+.nav-item[aria-current="page"] { background: var(--nav-active); color: #fff; }
+.nav-item svg, .nav-open svg {
+  flex: none; width: 24px; height: 24px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.nav-item[aria-current="page"] svg { color: #8fd18f; }
+.nav-label { overflow: hidden; text-overflow: ellipsis; }
+.nav-collapse { color: var(--nav-muted); font-weight: 500; }
+.nav-collapse svg { transition: transform 0.15s; }
+html.nav-collapsed .nav-collapse svg { transform: rotate(180deg); }
+
+/* Mate sections: indented under Mates while it is the open page. */
+.nav-group { position: relative; }
+.nav-sub { display: none; padding: 2px 0 6px 36px; }
+.nav-group:has(> [aria-current="page"]) > .nav-sub { display: grid; gap: 1px; }
+.nav-sub button {
+  min-height: 34px; padding: 4px 12px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--nav-muted); text-align: left; font-size: 0.9rem; white-space: nowrap;
+}
+.nav-sub button:hover:not(:disabled) { background: var(--nav-hover); color: #fff; }
+.nav-sub button[aria-pressed="true"] { color: #fff; font-weight: 600; }
+
+/* Collapsed: icons only; Mates' sections open as a flyout on hover/focus. */
+html.nav-collapsed .sidenav .nav-label { display: none; }
+html.nav-collapsed .nav-item { justify-content: center; padding: 8px; }
+html.nav-collapsed .nav-brand { justify-content: center; padding-inline: 0; }
+html.nav-collapsed .nav-sub,
+html.nav-collapsed .nav-group:has(> [aria-current="page"]) > .nav-sub { display: none; }
+html.nav-collapsed .nav-group:is(:hover, :focus-within) > .nav-sub {
+  display: grid; gap: 1px; position: absolute; left: 100%; top: 0; z-index: 31;
+  margin-left: 8px; padding: 6px; min-width: 150px;
+  background: var(--nav-bg); border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+/* bridge the gap so the flyout doesn't close while the pointer crosses it */
+html.nav-collapsed .nav-group:is(:hover, :focus-within) > .nav-sub::before {
+  content: ""; position: absolute; inset: 0 100% 0 -10px;
+}
+
+.nav-open { display: none; min-height: 40px; padding: 6px 8px; }
+.nav-backdrop { position: fixed; inset: 0; z-index: 29; background: rgba(0, 0, 0, 0.45); }
+
+/* Phones: menu becomes an overlay drawer, always full width. */
+@media (max-width: 759px) {
+  body, html.nav-collapsed body { padding-left: 0; }
+  .sidenav { --nav-w: 240px; transform: translateX(-100%); transition: transform 0.2s; }
+  html.nav-open .sidenav { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, 0.4); }
+  html.nav-collapsed .sidenav .nav-label { display: inline; }
+  html.nav-collapsed .nav-item { justify-content: flex-start; padding: 8px 12px; }
+  html.nav-collapsed .nav-brand { justify-content: flex-start; padding-inline: 8px; }
+  html.nav-collapsed .nav-group:has(> [aria-current="page"]) > .nav-sub { display: grid; position: static; margin: 0; padding: 2px 0 6px 36px; box-shadow: none; }
+  .nav-collapse { display: none; }
+  .nav-open { display: inline-flex; align-items: center; }
+}
+@media (prefers-reduced-motion: reduce) { .sidenav, .nav-collapse svg { transition: none; } }
 
 button {
   font: inherit;
@@ -149,6 +249,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .play { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 760px) {
   .play { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
+  .info { width: calc(100% - 16px - 280px); } /* same width as the board column */
 }
 .board-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 

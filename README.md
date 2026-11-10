@@ -1,4 +1,4 @@
-# Mate Drills
+# ChessHub
 
 A small installable PWA with a chessboard and random sets of 10 checkmate puzzles. Mate mode has four sections, each with its own set and progress: **Patterns** (22 classic mating patterns) and **Mate in 1 / 2 / 3** from László Polgár's *Chess: 5334 Problems, Combinations and Games*.
 

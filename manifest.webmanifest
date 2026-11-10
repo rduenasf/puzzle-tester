@@ -1,6 +1,6 @@
 {
-  "name": "Mate Drills",
-  "short_name": "Mate Drills",
+  "name": "ChessHub",
+  "short_name": "ChessHub",
   "description": "Ten random checkmate puzzles. Works offline.",
   "start_url": "./",
   "scope": "./",

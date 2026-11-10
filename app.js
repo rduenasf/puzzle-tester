@@ -10,8 +10,8 @@ import { Stockfish, Maia, MAIA_MB, sampleMove } from './engines.js';
 const SET_SIZE = 10;
 const MODE_KEY = 'drills-mode';
 const MODES = {
-  mate: { pool: PUZZLES, key: 'mate-drills-v1', title: 'Mate Drills' },
-  strategy: { pool: STRATEGIC, key: 'strategy-drills-v1', title: 'Strategy Drills' },
+  mate: { pool: PUZZLES, key: 'mate-drills-v1', title: 'Mates' },
+  strategy: { pool: STRATEGIC, key: 'strategy-drills-v1', title: 'Strategy Puzzles' },
   // Everything the current miner settings keep for the last 30 days, with each check's values.
   // browse: the whole pool as a numbered, filterable list instead of random sets of 10.
   review: { pool: review.STRATEGIC_REVIEW, config: review.STRATEGIC_REVIEW_CONFIG, key: 'review-drills-v3', title: 'Review: mined problems', browse: true },
@@ -1100,6 +1100,7 @@ function renderProgress() {
       const fb = fbOf(p);
       b.lastChild.textContent = (isFav(p) ? '★ ' : '') + (fb?.rating ? `${FB_RATING[fb.rating].split(' ')[0]} ` : '') + (r ? STATUS_LABEL[r] : '');
     });
+    $('progress-meta').hidden = true; // Polgár-only row; don't leave it up from Mates
     return;
   }
   ol.classList.toggle('long', isOrdered());
@@ -1372,10 +1373,12 @@ function setMode(m) {
   mode = m;
   try { localStorage.setItem(MODE_KEY, m); } catch {}
   $('app-title').textContent = MODES[m].title;
-  document.title = MODES[m].title;
-  for (const k of Object.keys(MODES)) $(`mode-${k}`).setAttribute('aria-pressed', String(m === k));
+  document.title = `${MODES[m].title} · ChessHub`;
+  for (const k of Object.keys(MODES)) {
+    if (m === k) $(`mode-${k}`).setAttribute('aria-current', 'page');
+    else $(`mode-${k}`).removeAttribute('aria-current');
+  }
   $('new-set').hidden = isBrowse() || isOrdered();
-  $('sections').hidden = m !== 'mate';
   document.querySelector('.app').classList.toggle('browsing', isBrowse());
   if (isBrowse()) { loadStore(); fillFilters(); }
   state = loadState() || newSet();
@@ -1385,7 +1388,37 @@ function setMode(m) {
   if (isBrowse()) rowEls[state.index]?.scrollIntoView({ block: 'nearest' });
   if (state.results.every(Boolean)) showSummary();
 }
-for (const k of Object.keys(MODES)) $(`mode-${k}`).addEventListener('click', () => mode !== k && setMode(k));
+for (const k of Object.keys(MODES)) $(`mode-${k}`).addEventListener('click', () => { closeNav(); if (mode !== k) setMode(k); });
+
+// ---------- left menu: collapse to icons (desktop), drawer (phones) ----------
+const NAV_KEY = 'nav-collapsed';
+const root = document.documentElement;
+function syncCollapse() {
+  const c = root.classList.contains('nav-collapsed');
+  const b = $('nav-collapse');
+  b.setAttribute('aria-expanded', String(!c));
+  b.title = c ? 'Expand menu' : 'Collapse menu';
+  b.querySelector('.nav-label').textContent = c ? 'Expand' : 'Collapse';
+}
+$('nav-collapse').addEventListener('click', () => {
+  const c = root.classList.toggle('nav-collapsed');
+  try { localStorage.setItem(NAV_KEY, c ? '1' : '0'); } catch {}
+  syncCollapse();
+  window.dispatchEvent(new Event('resize')); // the board's width changed: let Chessground re-measure
+});
+syncCollapse();
+function closeNav() {
+  root.classList.remove('nav-open');
+  $('nav-backdrop').hidden = true;
+  $('nav-open').setAttribute('aria-expanded', 'false');
+}
+$('nav-open').addEventListener('click', () => {
+  root.classList.add('nav-open');
+  $('nav-backdrop').hidden = false;
+  $('nav-open').setAttribute('aria-expanded', 'true');
+});
+$('nav-backdrop').addEventListener('click', closeNav);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && root.classList.contains('nav-open')) closeNav(); });
 
 // Section buttons (mate mode only).
 for (const [k, sec] of Object.entries(SECTIONS)) {
@@ -1396,7 +1429,8 @@ for (const [k, sec] of Object.entries(SECTIONS)) {
   b.title = `${sec.about} (${sec.pool.length} puzzles)`;
   b.setAttribute('aria-pressed', String(k === section));
   b.addEventListener('click', () => {
-    if (busy || k === section) return;
+    closeNav();
+    if (busy || (k === section && mode === 'mate')) return;
     section = k;
     try { localStorage.setItem(SECTION_KEY, k); } catch {}
     for (const j of Object.keys(SECTIONS)) $(`section-${j}`).setAttribute('aria-pressed', String(j === k));

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Mate Drills</title>
+  <title>ChessHub</title>
   <meta name="description" content="Checkmate and strategy puzzles. Works offline.">
   <meta name="theme-color" content="#2b2622">
   <link rel="manifest" href="manifest.webmanifest">
@@ -13,22 +13,50 @@
   <link rel="stylesheet" href="vendor/chessground.brown.css">
   <link rel="stylesheet" href="vendor/chessground.cburnett.css">
   <link rel="stylesheet" href="styles.css">
+  <script>try { if (localStorage.getItem('nav-collapsed') === '1') document.documentElement.classList.add('nav-collapsed'); } catch {}</script>
 </head>
 <body>
+  <nav id="sidenav" class="sidenav" aria-label="Main">
+    <div class="nav-brand">
+      <img src="icons/icon-192.png" alt="" width="32" height="32">
+      <span class="nav-label">ChessHub</span>
+    </div>
+    <ul class="nav-list">
+      <li class="nav-group">
+        <button id="mode-mate" class="nav-item" type="button" title="Mates">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v4M10 4h4M7 10c0-2 2.2-3.5 5-3.5S17 8 17 10c0 2-1.5 3-1.5 5h-7C8.5 13 7 12 7 10zM8 15h8l1 4H7zM5 22h14"/></svg>
+          <span class="nav-label">Mates</span>
+        </button>
+        <div id="sections" class="nav-sub" role="group" aria-label="Mate section"></div>
+      </li>
+      <li>
+        <button id="mode-strategy" class="nav-item" type="button" title="Strategy Puzzles">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+          <span class="nav-label">Strategy Puzzles</span>
+        </button>
+      </li>
+      <li>
+        <button id="mode-review" class="nav-item" type="button" title="Review: all problems from the current miner settings, with the checks each one passed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 11h7M4 16h5"/><circle cx="16" cy="15" r="4"/><path d="M19 18l3 3"/></svg>
+          <span class="nav-label">Review</span>
+        </button>
+      </li>
+    </ul>
+    <button id="nav-collapse" class="nav-item nav-collapse" type="button" aria-expanded="true" title="Collapse menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      <span class="nav-label">Collapse</span>
+    </button>
+  </nav>
+  <div id="nav-backdrop" class="nav-backdrop" hidden></div>
+
   <main class="app">
     <header class="top">
-      <h1 id="app-title">Mate Drills</h1>
-      <div class="top-actions">
-        <div class="modes" role="group" aria-label="Puzzle type">
-          <button id="mode-mate" type="button" aria-pressed="true">Mate</button>
-          <button id="mode-strategy" type="button" aria-pressed="false">Strategy</button>
-          <button id="mode-review" type="button" aria-pressed="false" title="All problems from the current miner settings, with the checks each one passed">Review</button>
-        </div>
-        <button id="new-set" class="ghost" type="button">New set</button>
-      </div>
+      <button id="nav-open" class="nav-open ghost" type="button" aria-label="Open menu" aria-controls="sidenav" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h1 id="app-title">Mates</h1>
+      <button id="new-set" class="ghost" type="button">New set</button>
     </header>
-
-    <div id="sections" class="modes sections" role="group" aria-label="Mate section" hidden></div>
 
     <div id="progress-meta" class="progress-meta" hidden>
       <span id="progress-count"></span>
