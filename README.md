@@ -16,7 +16,7 @@ The **Strategy** toggle switches to quiet positional problems mined from my own 
 The **Play it out vs engine** box plays the other side from whatever is on the board, in any mode. Play a move (a wrong one, say), then **Play from here** to see how the engine punishes it; **Switch sides** lets the engine take your side instead. Opponents:
 
 - **Stockfish** 18 (lite, single-threaded WASM, ~7 MB): full strength or a set Elo. Each reply shows its eval and expected line.
-- **Maia-3** (ONNX, 46 MB, downloaded on first use): picks moves by how likely a human at the chosen rating is to play them, and shows the top choices with their percentages.
+- **Maia-3** (ONNX, 46 MB, not in this repo: downloaded on first use from the Maia platform's GitHub repo): picks moves by how likely a human at the chosen rating is to play them, and shows the top choices with their percentages.
 
 Both run in the browser and work offline once loaded. Sources and licenses: [`vendor/engines/README.md`](vendor/engines/README.md).
 

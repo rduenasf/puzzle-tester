@@ -1,10 +1,15 @@
 // Bump VERSION whenever any cached file changes.
 const VERSION = 'v21';
 const CACHE = `mate-drills-${VERSION}`;
-// Engine files (Stockfish, ONNX Runtime, the Maia model: ~65 MB) are fetched only when first
-// used and never change under the same name, so they are served cache-first from a cache of
-// their own that survives VERSION bumps. Give a changed file a new name.
+// Engine files (Stockfish, ONNX Runtime: ~19 MB, plus the 46 MB Maia model from GitHub) are
+// fetched only when first used and never change under the same URL, so they are served
+// cache-first from a cache of their own that survives VERSION bumps. Give a changed file a new name.
 const ENGINES = 'mate-drills-engines-v1';
+// The Maia model is not in this repo (see MAIA_MODEL_URL in engines.js): a commit-pinned file
+// on raw.githubusercontent.com, so its URL is immutable too.
+const isEngineFile = (url) => (url.origin === location.origin
+  ? url.pathname.includes('/vendor/engines/')
+  : url.hostname === 'raw.githubusercontent.com' && url.pathname.endsWith('.onnx'));
 const ASSETS = [
   './',
   './index.html',
@@ -42,8 +47,8 @@ self.addEventListener('activate', (e) => {
 // Network-first: always fresh when online, cached copy when offline.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (url.pathname.includes('/vendor/engines/')) {
+  if (e.request.method !== 'GET') return;
+  if (isEngineFile(url)) {
     e.respondWith(caches.open(ENGINES).then((c) => c.match(e.request, { ignoreSearch: true }).then((hit) => hit
       || fetch(e.request).then((res) => {
         if (res.status === 200) c.put(e.request, res.clone());
@@ -51,6 +56,7 @@ self.addEventListener('fetch', (e) => {
       }))));
     return;
   }
+  if (url.origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {

@@ -75,6 +75,11 @@ export class Stockfish {
 // The Maia platform's ONNX export (CSSLab/maia-platform-frontend, GPL-3.0): one position in,
 // a probability for each of 4352 moves and a loss/draw/win estimate out, at any rating.
 export const MAIA_MB = 46;
+// Not in this repo: each browser downloads it from the Maia platform's GitHub repo, pinned to
+// a commit so it can't change under us (raw.githubusercontent.com allows cross-origin fetches).
+// sha256 405bf76c15727dad8728b352c06a8f3c1b80fb2760e8d666b32485c63d75b856. sw.js caches this URL.
+export const MAIA_MODEL_URL = 'https://raw.githubusercontent.com/CSSLab/maia-platform-frontend/'
+  + '0013cc8e6ec52c88f5b3d694781d4cc8427cb91a/public/maia3/maia3_simplified.onnx';
 
 function mirrorSquare(sq) { return sq[0] + (9 - +sq[1]); }
 function mirrorFen(fen) {
@@ -130,7 +135,7 @@ export class Maia {
         this.worker.postMessage({
           type: 'init',
           ortUrl: new URL('ort/', base).href,
-          modelUrl: new URL('maia/maia3_simplified.onnx', base).href,
+          modelUrl: MAIA_MODEL_URL,
         });
       });
     })();
