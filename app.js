@@ -562,6 +562,17 @@ function evaluateStrategy(moves) {
   return { ok: good, incomplete: false, failAt: good ? -1 : 0, marks, loss, label: labelFor(loss), san: first.san };
 }
 
+// Review: did the user just repeat the move they played in the original game?
+const repeatsGameMove = (m) => mode === 'review' && !!puzzle.played && uci(m) === puzzle.played;
+const RETHINK_TIPS = [
+  'Your first instinct is the one that cost you. Take longer this time.',
+  'Same idea as in the game. Look for a different plan, not just a different square.',
+  "Before moving, ask: what does my opponent want here, and how does this move help them?",
+  'Slow down: list every check, capture and threat for both sides, then compare candidates.',
+  'Try ruling this move out first, then see what else the position offers.',
+];
+const rethinkTip = () => RETHINK_TIPS[mistakes % RETHINK_TIPS.length];
+
 const sanOf = (fen, u) => {
   try { return new Chess(fen).move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }).san; } catch { return u; }
 };
@@ -853,7 +864,11 @@ function submit() {
       if (state.results.every(Boolean)) showSummary();
     } else {
       mistakes++;
-      setStatus(`${verdict.label}: ${verdict.san} loses ${verdict.loss}cp. Undo and try again.`, 'bad');
+      if (repeatsGameMove(moves[0])) {
+        setStatus(`${verdict.san} again — that's the move you played in the game (−${verdict.loss}cp). ${rethinkTip()} Undo and try again.`, 'bad');
+      } else {
+        setStatus(`${verdict.label}: ${verdict.san} loses ${verdict.loss}cp. Undo and try again.`, 'bad');
+      }
       shake();
     }
     render();
