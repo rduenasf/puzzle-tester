@@ -164,7 +164,36 @@ const FILTERS = {
     of: (p) => fbOf(p)?.rating || 'unrated',
     name: (v) => FB_RATING[v] || 'not rated',
   },
+  fav: {
+    label: 'all problems',
+    of: (p) => (isFav(p) ? 'yes' : 'no'),
+    name: (v) => (v === 'yes' ? '★ favorites' : 'not favorited'),
+  },
 };
+
+// ---------- favorites (Review): problems starred for later analysis ----------
+// Keyed like feedback (game link + FEN) so stars survive a re-export.
+const FAV_KEY = 'review-favorites-v1';
+let favorites = (() => { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || {}; } catch { return {}; } })();
+const isFav = (p) => !!favorites[fbKey(p)];
+function renderFav() {
+  const b = $('fav');
+  b.hidden = !isBrowse();
+  if (!isBrowse()) return;
+  const on = isFav(puzzle);
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? '★ Favorited' : '☆ Favorite';
+  b.title = on ? 'Remove from favorites' : 'Favorite this problem for later analysis';
+}
+$('fav').addEventListener('click', () => {
+  const k = fbKey(puzzle);
+  if (favorites[k]) delete favorites[k];
+  else favorites[k] = { at: new Date().toISOString(), id: puzzle.id, num: numOf.get(puzzle.id), fen: puzzle.fen, link: puzzle.link };
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); } catch {}
+  renderFav();
+  refreshCounts('fav');
+  renderProgress();
+});
 
 // ---------- feedback on Review problems (for tuning the miner: miner/feedback.py) ----------
 // Keyed by game link + FEN, not the #number or id, so ratings survive a re-export.
@@ -314,6 +343,9 @@ function fillFilters() {
     } else if (k === 'fb') {
       const n = (v) => pool().filter((p) => f.of(p) === v).length;
       for (const v of ['unrated', 'good', 'meh', 'bad']) add(v, `${f.name(v)} (${n(v)})`);
+    } else if (k === 'fav') {
+      const n = (v) => pool().filter((p) => f.of(p) === v).length;
+      for (const v of ['yes', 'no']) add(v, `${f.name(v)} (${n(v)})`);
     } else if (k === 'tc') {
       const byClass = {};
       for (const p of pool()) {
@@ -443,6 +475,7 @@ function loadPuzzle(i) {
   // A finished strategy problem keeps showing its game info and checks when revisited.
   $('fb-saved').textContent = '';
   renderFeedback();
+  renderFav();
   if (state.results[i] && isStrategy()) showGameDetail();
   else { showWhy(false); $('wrong').hidden = true; }
   // Snap to the new puzzle instead of animating from the previous position.
@@ -1010,8 +1043,9 @@ function renderProgress() {
     rowEls.forEach((b, i) => {
       const r = state.results[i];
       b.className = [r || '', i === state.index ? 'current' : ''].join(' ').trim();
-      const fb = fbOf(pool().find((x) => x.id === state.ids[i]));
-      b.lastChild.textContent = (fb?.rating ? `${FB_RATING[fb.rating].split(' ')[0]} ` : '') + (r ? STATUS_LABEL[r] : '');
+      const p = pool().find((x) => x.id === state.ids[i]);
+      const fb = fbOf(p);
+      b.lastChild.textContent = (isFav(p) ? '★ ' : '') + (fb?.rating ? `${FB_RATING[fb.rating].split(' ')[0]} ` : '') + (r ? STATUS_LABEL[r] : '');
     });
     return;
   }
