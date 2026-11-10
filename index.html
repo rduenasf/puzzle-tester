@@ -69,6 +69,7 @@
       <div class="info-side">
         <button id="fav" type="button" class="ghost small fav" aria-pressed="false" title="Favorite this problem for later analysis" hidden>☆ Favorite</button>
         <button id="copy-fen" type="button" class="ghost small" title="Copy this puzzle's starting position as FEN">Copy FEN</button>
+        <button id="flip" type="button" class="ghost small flip" aria-pressed="false" title="Flip the board (X or F)" aria-label="Flip the board"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 4 3 8M7 4l4 4M17 20V4M17 20l-4-4M17 20l4-4"/></svg></button>
         <div id="turn" class="turn" aria-hidden="true"></div>
       </div>
     </section>
@@ -87,6 +88,13 @@
         </div>
         <p id="moves-empty" class="empty">Play the moves for both sides on the board.</p>
         <ol id="moves" class="moves"></ol>
+        <div class="move-nav" role="group" aria-label="Step through the moves">
+          <button id="nav-first" type="button" class="small ghost" title="Start position (↑ or Home)" aria-label="Start position">«</button>
+          <button id="nav-back" type="button" class="small ghost" title="Previous move (←)" aria-label="Previous move">‹</button>
+          <span id="nav-pos" class="count" aria-live="polite"></span>
+          <button id="nav-fwd" type="button" class="small ghost" title="Next move (→)" aria-label="Next move">›</button>
+          <button id="nav-last" type="button" class="small ghost" title="Last move (↓ or End)" aria-label="Last move">»</button>
+        </div>
         <div class="row2">
           <button id="undo" type="button">Undo</button>
           <button id="clear" type="button">Clear</button>

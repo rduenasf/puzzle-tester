@@ -4,6 +4,8 @@ A small installable PWA with a chessboard and random sets of 10 checkmate puzzle
 
 - Play the whole line on the board (your moves and the defence), shown in the move list, then hit **Submit**. Any of your moves that still forces mate counts as correct; each is marked ✓ or ✗.
 - Hint highlights the piece to move, then the target square. Solution plays it out.
+- Step through the line with ← / → (↑ / Home and ↓ / End jump to the start and end), the « ‹ › » buttons, a click on a move, or the mouse wheel over the move list. Playing a move from an earlier position replaces the rest of the line. Shift + ← / → changes puzzle.
+- Flip the board with X or F, or the ⇅ button next to the turn dot. Each new puzzle starts with the side to move at the bottom.
 - Progress is saved in the browser; **New set** draws another 10.
 - Works offline after the first visit (service worker).
 

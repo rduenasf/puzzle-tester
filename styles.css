@@ -143,6 +143,8 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 }
 .turn.w { background: #fff; }
 .turn.b { background: #222; }
+button.flip { display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; }
+button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 
 .play { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 760px) {
@@ -166,6 +168,11 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 .moves li { display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 4px; align-items: center; padding: 2px 0; }
 .moves .num { color: var(--muted); font-size: 0.9rem; }
 .mv { padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+.mv[data-ply] { cursor: pointer; }
+.mv[data-ply]:hover:not(.cur) { background: var(--line); }
+.move-nav { display: grid; grid-template-columns: auto auto 1fr auto auto; gap: 6px; align-items: center; }
+.move-nav button { min-width: 40px; font-size: 1.05rem; }
+.move-nav .count { text-align: center; }
 .mv.skip { color: var(--muted); font-weight: 400; }
 .mv.cur { background: var(--last); }
 .mv.ok { background: rgba(63, 125, 88, 0.18); color: var(--accent); }

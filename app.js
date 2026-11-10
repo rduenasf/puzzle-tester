@@ -96,6 +96,13 @@ const uci = (m) => m.from + m.to + (m.promotion || '');
 // ---------- state ----------
 let state; // built by setMode() at startup
 let game, puzzle, player, busy, hints, verdict, mistakes, usedHelp, shownFen, shownSolution;
+// Stepping back through the line: { ply, fen } shows the position after `ply` moves while
+// the line itself stays as entered. `fen` is the live position when the view was set, so any
+// change to the line (a move, Undo, a new puzzle…) drops back to the live position.
+let view = null;
+// Board seen from the other side (X / F or the flip button). Each new puzzle starts unflipped,
+// with the side to move at the bottom.
+let flipped = false;
 
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
@@ -455,6 +462,7 @@ function loadPuzzle(i) {
   mistakes = 0;
   shownFen = null;
   shownSolution = false;
+  flipped = false;
   setDetail('');
   cg.setShapes([]);
   usedHelp = false;
@@ -489,7 +497,19 @@ const side = (c) => (c === 'w' ? 'White' : 'Black');
 
 function enterMove(from, to) {
   if (spar) return sparMove(from, to);
-  if (busy || solved() || plies() >= maxPlies()) return false;
+  if (busy || solved()) return false;
+  // A move played while looking at an earlier position replaces the rest of the line.
+  const at = viewPly();
+  if (at < plies()) {
+    const tail = game.history({ verbose: true }).slice(at);
+    while (plies() > at) game.undo();
+    if (!game.moves({ square: from, verbose: true }).some((m) => m.to === to)) {
+      tail.forEach((m) => game.move(m));
+      return false;
+    }
+    view = null;
+  }
+  if (plies() >= maxPlies()) return false;
   const legal = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
   if (!legal.length) return false;
   let promotion;
@@ -805,6 +825,7 @@ function fmtTimeControl(tc) {
 
 function submit() {
   if (busy || solved() || spar) return;
+  view = null;
   const moves = game.history({ verbose: true });
   if (!moves.length) { setStatus('Make a move first.', 'bad'); return; }
   verdict = evaluate(moves);
@@ -868,6 +889,7 @@ function lineOnTrack() {
 
 function hint() {
   if (busy || solved() || shownSolution || spar) return;
+  view = null;
   if (isStrategy()) {
     if (plies()) { setStatus('Undo your move to get a hint.', 'bad'); return; }
     usedHelp = true;
@@ -960,34 +982,63 @@ function setStatus(text, kind = '') {
 
 const COLOR = { w: 'white', b: 'black' };
 
-function legalDests() {
+function legalDests(pos = game) {
   const dests = new Map();
-  for (const m of game.moves({ verbose: true })) {
+  for (const m of pos.moves({ verbose: true })) {
     if (!dests.has(m.from)) dests.set(m.from, []);
     dests.get(m.from).push(m.to);
   }
   return dests;
 }
 
+// ---------- stepping through the line ----------
+function viewPly() {
+  if (view && (view.fen !== game.fen() || view.ply >= plies())) view = null;
+  return view ? view.ply : plies();
+}
+function goTo(ply) {
+  if (busy || !game) return;
+  const n = plies();
+  ply = Math.max(0, Math.min(n, ply));
+  if (ply === viewPly()) return;
+  view = ply < n ? { ply, fen: game.fen() } : null;
+  render();
+}
+// The position after the first `ply` moves of the line.
+function positionAt(ply, hist) {
+  if (ply === hist.length) return game;
+  const g = new Chess(puzzle.fen);
+  for (let k = 0; k < ply; k++) g.move(hist[k]);
+  return g;
+}
+
 function render() {
   const hist = game.history({ verbose: true });
-  const last = hist[hist.length - 1];
-  const locked = spar ? spar.thinking || game.turn() !== spar.me : busy || solved() || shownSolution;
-  const canMove = !locked && (spar || plies() < maxPlies()) && !game.isGameOver();
-  const fen = game.fen();
+  const at = viewPly();
+  const back = at < hist.length;
+  const pos = positionAt(at, hist);
+  const last = hist[at - 1];
+  // Looking back in a game vs the engine is view only; in a puzzle a move there replaces the rest.
+  const locked = spar ? spar.thinking || pos.turn() !== spar.me || back : busy || solved() || shownSolution;
+  const canMove = !locked && (spar || at < maxPlies()) && !pos.isGameOver();
+  const fen = pos.fen();
   const cfg = {
-    orientation: COLOR[player],
-    turnColor: COLOR[game.turn()],
+    orientation: COLOR[flipped ? (player === 'w' ? 'b' : 'w') : player],
+    turnColor: COLOR[pos.turn()],
     lastMove: last ? [last.from, last.to] : undefined,
-    check: game.inCheck(),
-    movable: { color: canMove ? COLOR[game.turn()] : undefined, dests: canMove ? legalDests() : new Map() },
+    check: pos.inCheck(),
+    movable: { color: canMove ? COLOR[pos.turn()] : undefined, dests: canMove ? legalDests(pos) : new Map() },
   };
   // Only push a new position when it changed (setting fen also clears drawn shapes).
   if (fen !== shownFen) { cfg.fen = fen; shownFen = fen; }
   cg.set(cfg);
-  cg.setAutoShapes(hints);
+  cg.setAutoShapes(back ? [] : hints);
 
-  renderMoves(hist);
+  renderMoves(hist, at);
+  $('nav-first').disabled = $('nav-back').disabled = busy || at === 0;
+  $('nav-fwd').disabled = $('nav-last').disabled = busy || !back;
+  $('nav-pos').textContent = !back ? '' : at ? `${at} / ${hist.length}` : 'Start';
+  $('flip').setAttribute('aria-pressed', String(flipped));
   renderProgress();
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === state.ids.length - 1;
@@ -998,7 +1049,7 @@ function render() {
   $('submit').disabled = locked || !!spar || !plies();
 }
 
-function renderMoves(hist) {
+function renderMoves(hist, at) {
   const ol = $('moves');
   ol.textContent = '';
   const fen = puzzle.fen.split(' ');
@@ -1015,7 +1066,9 @@ function renderMoves(hist) {
       if (!white) row.appendChild(cell('…', 'skip'));
       ol.appendChild(row);
     }
-    const c = cell(m.san, i === hist.length - 1 ? 'cur' : '');
+    const c = cell(m.san, i === at - 1 ? 'cur' : '');
+    c.dataset.ply = i + 1;
+    c.title = 'Show this position';
     const mark = verdict ? verdict.marks[i] : null;
     if (mark === true) c.classList.add('ok');
     if (mark === false) c.classList.add('no');
@@ -1352,10 +1405,40 @@ for (const [k, sec] of Object.entries(SECTIONS)) {
   $('sections').appendChild(b);
 }
 
+// Step through the line: buttons, clicking a move, the mouse wheel over the move list.
+$('moves').addEventListener('click', (e) => {
+  const c = e.target.closest('.mv[data-ply]');
+  if (c) goTo(+c.dataset.ply);
+});
+$('moves').addEventListener('wheel', (e) => {
+  if (!plies() || Math.abs(e.deltaY) < 1) return;
+  e.preventDefault();
+  goTo(viewPly() + Math.sign(e.deltaY));
+}, { passive: false });
+$('nav-first').addEventListener('click', () => goTo(0));
+$('nav-back').addEventListener('click', () => goTo(viewPly() - 1));
+$('nav-fwd').addEventListener('click', () => goTo(viewPly() + 1));
+$('nav-last').addEventListener('click', () => goTo(plies()));
+function flip() {
+  if (!game) return;
+  flipped = !flipped;
+  render();
+}
+$('flip').addEventListener('click', flip);
+
 document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  // ←/→ step through the moves, ↑/Home and ↓/End jump to the start and end,
+  // Shift+←/→ change puzzle. Arrows don't press buttons, so they work with one focused.
+  const arrows = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -Infinity, ArrowDown: Infinity, Home: -Infinity, End: Infinity };
+  if (e.key in arrows && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    if (e.shiftKey) { if (e.key === 'ArrowLeft') $('prev').click(); if (e.key === 'ArrowRight') $('next').click(); }
+    else goTo(viewPly() + arrows[e.key]);
+    return;
+  }
+  if ((e.key === 'x' || e.key === 'f' || e.key === 'X' || e.key === 'F') && !e.altKey && !e.ctrlKey && !e.metaKey) { flip(); return; }
   if (e.target.closest('button')) return;
-  if (e.key === 'ArrowLeft') $('prev').click();
-  if (e.key === 'ArrowRight') $('next').click();
   if (e.key === 'Backspace') undo();
   if (e.key === 'Enter') submit();
 });
