@@ -124,6 +124,7 @@ def main():
                     "max_forcing", "quiet_above", "max_material_lost", "shallow_depth",
                     "shallow_multipv", "p_best_min", "p_best_max", "elo_delta",
                     "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
+                    "blunder", "blunder_max",
                     "since", "maia_model", "elo_map"]
             f.write(f"export const {a.var}_CONFIG = "
                     + json.dumps({k: cfg.get(k) for k in keep}) + ";\n")

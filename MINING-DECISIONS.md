@@ -1,6 +1,6 @@
 # Decision record: mining strategic problems from my games
 
-Status: living document. Last updated 2026-11-08.
+Status: living document. Last updated 2026-11-10.
 Owner: Rodrigo (chess.com `real_Holimion`, Lichess `rduenasf`).
 
 This records what the miner (`miner/`, git-ignored, local only) and the trainer's
@@ -72,11 +72,11 @@ my move; moves where I played the engine's best move; non-standard games.
 
 | # | Check | Current rule | Flag(s) | History |
 |---|---|---|---|---|
-| 1 | cp loss | 30-350 | `--cp-min --cp-max` | Was 30-150. Raised so 20...Qb5 (318cp) qualifies |
+| 1 | cp loss | 30-350; 350-1000 as blunder_check | `--cp-min --cp-max --blunder-max` | Was 30-150. Raised so 20...Qb5 (318cp) qualifies. See §6.7 |
 | 2 | Balanced position | \|eval before\| <= 150 | `--max-eval` | Unchanged |
 | 3 | Best line is quiet | <= 2 checks/captures/promotions in the first 6 plies of the best line | `--max-forcing --forcing-plies` | Unchanged |
 | 4 | Big loss isn't just dropped material | For losses > 150: after 6 plies of the opponent's best reply I'm down at most 1 pawn vs before my move | `--quiet-above --max-material-lost` | New. See §6.3 |
-| 5 | No deep calculation | A depth-3 multipv-3 search has the engine's move in its top 3 | `--shallow-depth --shallow-multipv` | Unchanged |
+| 5 | No deep calculation | A depth-4 multipv-3 search has the engine's move in its top 3 | `--shallow-depth --shallow-multipv` | Was depth 3 until 2026-11-10. See §6.6 |
 | 6 | Best move findable at my level | Maia p(best) at my Elo in 20-65%, **or** an exception below | `--p-best-min --p-best-max` | Exceptions added |
 | 7 | Stronger players find it | Maia p(best) at my Elo + 500 >= 10% | `--elo-delta --p-best-strong-min` | New |
 | off | p(best) rises at +delta | p(best) at +delta >= p(best) + 5 points | `--p-gain-min 0.05` re-enables | Removed. See §6.2 |
@@ -88,6 +88,8 @@ Categories (tag in the outputs, in this order):
 - **typical**: my move was Maia's #1 prediction at my Elo. The 20% minimum is waived
   (the engine move may be rare at my level), but check 7 still applies.
 - **single** (shown as "regular"): p(best) in 20-65%.
+- **blunder_check**: cp loss above 350 (up to 1000) that passes every other check. Checked
+  first, so it wins over easy_miss and typical. `--no-blunder` drops it. See §6.7.
 - **drift**: windows of 4 consecutive moves of mine losing >= 80cp in total, none
   losing > 75; flags the worst move (floor 15cp) and runs it through the same checks.
   Has produced 0-1 problems on 730 games. Not tuned.
@@ -102,10 +104,13 @@ The Lichess games produced no problems in any run.
 | Natural check off | 213 | 0.29 |
 | + cp-max 350, material rule, easy_miss | 368 | 0.50 |
 | + gain check off, typical category | 1,091 | 1.49 |
-| + p(best) at +500 >= 10% (**current**) | 861 | 1.18 |
+| + p(best) at +500 >= 10% | 861 | 1.18 |
+| + shallow search depth 3 -> 4 | 939 | 1.29 |
+| + blunder_check 350-1000cp (**current**, v6) | 1,011 | 1.38 |
 
-Current split: 419 regular, 357 typical, 85 easy miss; 783 bullet (all 2+1), 75 blitz
-(3+2 x59, 5+0 x16), 3 rapid.
+Current split: 456 regular, 389 typical, 94 easy miss, 72 blunder check (v6; the bullet/blitz
+split below is v5); 852 bullet (all 2+1), 83 blitz
+(3+2 x67, 5+0 x16), 4 rapid.
 
 ## 6. Decisions and the reasoning behind them
 
@@ -156,6 +161,41 @@ the trainer's fresh depth-16 re-score picked a different best move in 162 (19%),
 my game move now scores within 30cp. Not fixed. Options: raise `--cp-min`, re-check
 candidates deeper, or require the mining and re-score runs to agree.
 
+### 6.6 Shallow search depth 3 -> 4 (2026-11-10)
+
+Check 5 asks whether a quick Stockfish search (multipv 3) already has the depth-16 best move
+in its top 3. It only checks that rank: it ignores evals and my move.
+
+- Depth 16 for the quick search was measured and rejected: the main search is also depth 16,
+  so the check becomes "does Stockfish agree with itself". Of the 1,209 v4 candidates passing
+  every other check, depth 3 kept 861 and depth 16 kept 1,192 (the 17 it dropped were
+  multipv noise).
+- A 10-position sample of what depth 3 drops but depth 16 keeps (`miner/depthcompare.py`
+  adds both searches' lines to an exported file; it was shown in a temporary trainer
+  section, since removed) split in two: near misses where depth 3
+  had the best move at #3-#8 with a similar eval, and positions where depth 3's evals were
+  off by 5-10 pawns (it thought the best move lost material, or my move won some).
+- Chosen: depth 4, my call: I should be able to calculate 4 plies. Result: 939 problems
+  (was 861); 795 in both runs, 141 new, 64 dropped (depth 4 doesn't keep everything depth 3
+  kept: its top 3 can differ).
+- Idea not done: compare evals instead of rank, e.g. reject when the quick search rates my
+  move above the best move by more than X (best move's eval minus my move's, at the quick depth).
+
+### 6.7 Blunder-check category for losses above 350cp (2026-11-10)
+
+The 350cp cap was never a measured boundary: it was set just above Qb5 (318cp), when the
+material rule (check 4) was added. Since then the material rule is what separates tactical
+losses from strategic ones, and a big loss can still be strategic.
+
+- Measured on `v5_features.csv` (re-applying the other checks): moves losing more than 350cp
+  that pass everything else: 33 at 350-500, 26 at 500-700, 13 at 700-1000, 3 above 1000.
+- Chosen: keep them as their own category, `blunder_check` (my call, by analogy with
+  easy_miss), so they can be rated and filtered separately. Capped at 1000cp
+  (`--blunder-max`): above that the position is usually decided.
+- Watch: the material rule only looks 6 plies ahead, so a big loss with no material lost may
+  be a slower tactic (a mating attack, material won on ply 8). Rate these with the
+  `tactical` / `decided` tags.
+
 ## 7. Reference example: 20...Qb5
 
 Bullet 2+1, 2026-11-08, WackyCard vs real_Holimion, game 186787187866. Position (Black to
@@ -182,7 +222,7 @@ It was the case that drove the cp range, the material rule and the easy-miss cat
   game's positions kept on one process. Measured: 1 x 10 threads 4.0 pos/s; 6 x 1 8.2;
   12 x 1 9.7 (19 pos/s on bullet games). About 7s per game; all 17k games would take ~1.5
   days.
-- Shallow (depth-3) searches use a separate single-thread process with a cleared hash,
+- Shallow (depth-4) searches use a separate single-thread process with a cleared hash,
   so the deep search's hash can't make them deeper.
 - Cache: `miner/work/sf_cache.json`, keyed by full FEN + depth + multipv. Keying by
   position only (ignoring move counters) was measured and rejected: repeats after ply 12
@@ -281,8 +321,8 @@ From `miner/` (Windows, Git Bash):
 
 ```bash
 .venv/Scripts/python.exe fetch_games.py --chesscom real_Holimion --lichess rduenasf --out work
-cd work && PYTHONPATH=.. ../.venv/Scripts/python.exe -m stratmine mine chesscom.pgn,lichess.pgn real_Holimion,rduenasf --since 2026-10-08 --out-pgn v4_problems.pgn --out-csv v4_problems.csv --out-quiz v4_quiz.pgn --features v4_features.csv
-cd .. && .venv/Scripts/python.exe export_site.py work/v4_problems.csv --out work/review.js --var STRATEGIC_REVIEW --id-prefix r --config work/v4_problems_config.json
+cd work && PYTHONPATH=.. ../.venv/Scripts/python.exe -m stratmine mine chesscom.pgn,lichess.pgn real_Holimion,rduenasf --since 2026-10-08 --out-pgn v5_problems.pgn --out-csv v5_problems.csv --out-quiz v5_quiz.pgn --features v5_features.csv
+cd .. && .venv/Scripts/python.exe export_site.py work/v5_problems.csv --out work/review.js --var STRATEGIC_REVIEW --id-prefix r --config work/v5_problems_config.json
 .venv/Scripts/python.exe explain.py work/review.js
 .venv/Scripts/python.exe whatchanged.py work/review.js
 cp work/review.js ../strategic_review.js

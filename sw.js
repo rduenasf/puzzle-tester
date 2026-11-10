@@ -1,5 +1,5 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v26';
+const VERSION = 'v32';
 const CACHE = `mate-drills-${VERSION}`;
 // Engine files (Stockfish, ONNX Runtime: ~19 MB, plus the 46 MB Maia model from GitHub) are
 // fetched only when first used and never change under the same URL, so they are served

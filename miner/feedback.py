@@ -30,7 +30,7 @@ TAG_HINTS = {
     "obvious": "upper p(best) bound (--p-best-max) / the easy_miss category",
     "unclear": "explanation side (explain.py / whatchanged.py), or the line is too long",
     "engine_move": "check 7 (--p-best-strong-min / --elo-delta) or --p-best-min",
-    "decided": "check 2 (--max-eval)",
+    "decided": "check 2 (--max-eval); for blunder_check problems, --blunder-max",
     "time": "clock: consider a minimum clock left / time spent (gameClock)",
     "wrong_verdict": "explain.py material rule (§9.3)",
     "duplicate": "dedupe by structure/plan (not implemented)",

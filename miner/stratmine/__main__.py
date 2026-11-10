@@ -59,7 +59,13 @@ def main(argv=None):
                    help="Time class from base + W*increment (chess.com uses 40; 0 = base only)")
     m.add_argument("--skip-plies", type=int, default=12)
     m.add_argument("--cp-min", type=int, default=30)
-    m.add_argument("--cp-max", type=int, default=350)
+    m.add_argument("--cp-max", type=int, default=350,
+                   help="Top of the normal range; losses above it up to --blunder-max are the "
+                        "blunder_check category")
+    m.add_argument("--blunder-max", type=int, default=1000,
+                   help="Max cp loss for the blunder_check category (all other checks still apply)")
+    m.add_argument("--no-blunder", dest="blunder", action="store_false",
+                   help="Drop the blunder_check category (cp loss capped at --cp-max)")
     m.add_argument("--quiet-above", type=int, default=150,
                    help="Losses above this must not simply drop material: after --forcing-plies "
                         "of the opponent's best line you may be down at most --max-material-lost")
@@ -69,7 +75,9 @@ def main(argv=None):
     m.add_argument("--forcing-plies", type=int, default=6)
     m.add_argument("--max-forcing", type=int, default=2,
                    help="Max checks/captures/promotions in the first forcing-plies of the best line")
-    m.add_argument("--shallow-depth", type=int, default=3)
+    m.add_argument("--shallow-depth", type=int, default=4,
+                   help="Depth of the quick search that must have the best move in its top "
+                        "--shallow-multipv (was 3 until 2026-11-10)")
     m.add_argument("--shallow-multipv", type=int, default=3)
     m.add_argument("--p-best-min", type=float, default=0.20)
     m.add_argument("--p-best-max", type=float, default=0.65)

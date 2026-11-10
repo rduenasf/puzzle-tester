@@ -13,7 +13,7 @@ from .elo import to_maia
 from .sf import MATE
 
 FILTERS = [
-    ("cp_range", "cp loss in [cp-min, cp-max]"),
+    ("cp_range", "cp loss in [cp-min, blunder-max]"),
     ("eval_bound", "|eval before| <= max-eval"),
     ("forcing", "best line mostly non-forcing"),
     ("quiet_punishment", "big loss doesn't just drop material"),
@@ -213,7 +213,9 @@ def mine(a, sf, maia):
                 # 1 = my move was Maia's top prediction at my Elo
                 rec["my_rank"] = 1 + sum(p > rec["p_my"] for p in p_lo.values())
             r = {
-                "cp_range": cp_min <= rec["cp_loss"] <= cp_max,
+                # Losses above cp-max (up to blunder-max) are kept as blunder_check.
+                "cp_range": cp_min <= rec["cp_loss"] <= (max(cp_max, a.blunder_max)
+                                                         if a.blunder else cp_max),
                 "eval_bound": abs(rec["ev_before"]) <= a.max_eval,
                 "forcing": rec["forcing"] <= a.max_forcing,
                 # Big losses only count when the punishment doesn't simply win material
@@ -260,7 +262,8 @@ def mine(a, sf, maia):
             if fails:
                 stats["removed_" + fails[0]] += 1
             else:
-                kind = ("easy_miss" if rec["p_best"] > a.p_best_max
+                kind = ("blunder_check" if rec["cp_loss"] > a.cp_max
+                        else "easy_miss" if rec["p_best"] > a.p_best_max
                         else "typical" if rec["my_rank"] == 1 else "single")
                 stats["kept_" + kind] += 1
                 chosen.add(rec["ply"])
@@ -410,7 +413,8 @@ def report(stats, fails_any, drift_stats, drift_fails, n_problems, a):
         p(f"  {desc:42s} -{stats['removed_' + k]:<5d}  (fails in total: {fails_any[k]})")
     p(f"  kept: single {stats['kept_single']}, typical (my move = Maia's top) "
       f"{stats['kept_typical']}, easy_miss (p(best) > {a.p_best_max:.0%}) "
-      f"{stats['kept_easy_miss']}")
+      f"{stats['kept_easy_miss']}, blunder_check (cp loss > {a.cp_max}) "
+      f"{stats['kept_blunder_check']}")
     if a.drift:
         p("drift pipeline:")
         p(f"  qualifying windows {drift_stats['windows']}, unique worst moves "

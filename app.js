@@ -14,7 +14,7 @@ const MODES = {
   strategy: { pool: STRATEGIC, key: 'strategy-drills-v1', title: 'Strategy Puzzles' },
   // Everything the current miner settings keep for the last 30 days, with each check's values.
   // browse: the whole pool as a numbered, filterable list instead of random sets of 10.
-  review: { pool: review.STRATEGIC_REVIEW, config: review.STRATEGIC_REVIEW_CONFIG, key: 'review-drills-v3', title: 'Review: mined problems', browse: true },
+  review: { pool: review.STRATEGIC_REVIEW, config: review.STRATEGIC_REVIEW_CONFIG, key: 'review-drills-v4', title: 'Review: mined problems', browse: true },
 };
 let mode = (() => {
   try { const m = localStorage.getItem(MODE_KEY); return MODES[m] ? m : 'mate'; } catch { return 'mate'; }
@@ -143,7 +143,7 @@ const isBrowse = () => !!MODES[mode].browse;
 // Permanent numbers: position in the exported file (#1..#N). A re-export renumbers.
 const numOf = new Map();
 for (const m of Object.values(MODES)) if (m.browse) m.pool.forEach((p, i) => numOf.set(p.id, i + 1));
-const KIND_LABEL = { single: 'regular', typical: 'typical', easy_miss: 'easy miss', drift: 'drift' };
+const KIND_LABEL = { single: 'regular', typical: 'typical', easy_miss: 'easy miss', blunder_check: 'blunder check', drift: 'drift' };
 const NATURE_LABEL = { positional: 'positional', positional_then_material: 'positional → material', concrete: 'concrete', marginal: 'marginal' };
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
@@ -779,6 +779,7 @@ const KIND_TEXT = {
   single: 'Regular: the best move is findable at your level (Maia p between the limits).',
   typical: "Typical: your move was Maia's #1 prediction at your rating, so the minimum p(best) is waived.",
   easy_miss: 'Easy miss: most players at your rating find the best move (p above the upper limit).',
+  blunder_check: 'Blunder check: a big loss (above the normal cp range) that still passes every other check, including the material rule.',
   drift: 'Drift: the worst move of four in a row that slowly lost ground.',
 };
 // Shown for every problem that has check data; move names only once it's finished.
@@ -805,7 +806,9 @@ function showWhy(finished) {
   };
   const plies = C.forcing_plies;
   add('ok', 'Category:', KIND_TEXT[puzzle.kind] || puzzle.kind);
-  add('ok', `cp loss ${K.cpLoss}`, `(allowed ${C.cp_min}–${C.cp_max})`);
+  add('ok', `cp loss ${K.cpLoss}`, C.blunder && C.blunder_max > C.cp_max
+    ? `(normal ${C.cp_min}–${C.cp_max}; blunder check up to ${C.blunder_max})`
+    : `(allowed ${C.cp_min}–${C.cp_max})`);
   add('ok', `Position was balanced: eval ${fmtEval(K.evalBefore)} for you`, `(limit ±${(C.max_eval / 100).toFixed(2)})`);
   add('ok', `Best line is quiet: ${K.forcing} checks/captures in its first ${plies} plies`, `(max ${C.max_forcing})`);
   if (K.cpLoss > C.quiet_above) {
