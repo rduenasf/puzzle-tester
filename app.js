@@ -5,7 +5,7 @@ import { POLGAR } from './polgar.js';
 import { canMate, allRepliesLose } from './matesolver.js';
 import { STRATEGIC } from './strategic.js';
 import * as review from './strategic_review.js';
-import { Stockfish, Maia, MAIA_MB, sampleMove } from './engines.js';
+import { Stockfish, Maia, MAIA_MB, SF_MB, sfFull, sampleMove } from './engines.js';
 
 const SET_SIZE = 10;
 const MODE_KEY = 'drills-mode';
@@ -1362,7 +1362,10 @@ async function think(fen) {
     return { move, note: `Maia ${elo} played ${sanOf(fen, move)} (${Math.round(100 * p)}% of players at this level). Most likely: ${top}. White's expected score ${Math.round(100 * win)}%.` };
   }
   const elo = +sparCfg.sf || null;
-  if (!engines.sf?.ready) setStatus('Loading Stockfish…');
+  if (!engines.sf?.ready) {
+    sf().onProgress = (got, total) => setStatus(`Downloading Stockfish… ${Math.min(99, Math.round((100 * got) / total))}%`);
+    setStatus(sfFull() ? `Loading Stockfish (${SF_MB} MB the first time)…` : 'Loading Stockfish…');
+  }
   const r = await sf().search(fen, { movetime: elo ? 500 : 1500, elo });
   if (!r.move) return { move: null, note: '' };
   const pv = r.pv.length > 1 ? ` Expected line: ${pvSan(fen, r.pv.slice(0, 8))}.` : '';

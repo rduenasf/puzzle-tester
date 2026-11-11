@@ -1,11 +1,26 @@
-// In-browser opponents for "Play it out": Stockfish (WASM, single-threaded) and Maia-3 (ONNX).
+// In-browser opponents for "Play it out": Stockfish 19 (WASM) and Maia-3 (ONNX).
 // Both load on first use only; the service worker then keeps their files for offline use.
 import { Chess } from './vendor/chess.js';
 
 const base = new URL('./vendor/engines/', import.meta.url);
 
 // ---------- Stockfish ----------
-// Stockfish.js 18 "lite single": ~7 MB, needs no cross-origin isolation (GitHub Pages can't set it).
+// Stockfish.js 19. The full multi-threaded build needs SharedArrayBuffer, i.e. a cross-origin
+// isolated page. GitHub Pages can't send those headers, so sw.js adds them; that works from the
+// second load on (the first isn't controlled by the service worker yet). Until then, in a browser
+// without it, or if the full build fails to load, the "lite single" build (1.8 MB, smaller net,
+// one thread) is used instead.
+// The full build's 99 MB wasm is not in this repo (GitHub's file size limit): each browser
+// downloads it from unpkg, pinned to an npm version, which can't change (unpkg sends CORS and
+// CORP headers, so an isolated page may load it). sw.js caches this URL.
+// sha256 a599d78d72e0722d8895be84aca8b492d12e8bba3cdfcbcbc4a64017888c6667.
+export const SF_WASM_URL = 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19.wasm';
+export const SF_MB = 99;
+let fullFailed = false;
+export const sfFull = () => !fullFailed && globalThis.crossOriginIsolated === true && typeof SharedArrayBuffer === 'function';
+// The opponent and the eval bar can search at once, so each instance takes half the cores.
+const sfThreads = () => Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
+
 export class Stockfish {
   constructor() {
     this.worker = null;
@@ -13,15 +28,32 @@ export class Stockfish {
     this.listeners = new Set();
     this.queue = Promise.resolve();
     this.limited = null; // last UCI_Elo sent (null = full strength)
+    this.full = false; // set by load(): multi-threaded full build, or lite single
+    this.onProgress = null; // (loaded, total) bytes while the full build's wasm downloads
   }
 
   load() {
     if (this.ready) return this.ready;
-    this.worker = new Worker(new URL('stockfish/stockfish-18-lite-single.js', base));
-    this.worker.onmessage = (e) => { for (const f of [...this.listeners]) f(String(e.data)); };
-    this.ready = this.until('uciok', () => this.send('uci'))
+    this.full = sfFull();
+    this.limited = null;
+    if (this.full) {
+      // The engine reads its wasm URL from the hash; its pthread workers reuse this script.
+      this.worker = new Worker(new URL(`stockfish/stockfish-19.js#${encodeURIComponent(SF_WASM_URL)}`, base));
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => this.onProgress?.(e.data.loaded, e.data.total);
+      this.worker.postMessage({ progressPort: ch.port2 }, [ch.port2]);
+    } else {
+      this.worker = new Worker(new URL('stockfish/stockfish-19-lite-single.js', base));
+    }
+    this.worker.onmessage = (e) => { if (typeof e.data === 'string') for (const f of [...this.listeners]) f(e.data); };
+    const ready = this.until('uciok', () => this.send('uci'))
+      .then(() => { if (this.full) this.send(`setoption name Threads value ${sfThreads()}`); })
       .then(() => this.until('readyok', () => this.send('isready')));
-    this.worker.onerror = (e) => { this.ready = null; for (const f of [...this.listeners]) f(`error ${e.message || 'worker failed'}`); };
+    this.worker.onerror = (e) => { for (const f of [...this.listeners]) f(`error ${e.message || 'worker failed'}`); };
+    // If the full build can't load (offline before it was cached, out of memory), use the lite one.
+    this.ready = this.full
+      ? ready.catch(() => { fullFailed = true; this.worker.terminate(); this.ready = null; return this.load(); })
+      : ready.catch((err) => { this.ready = null; throw err; });
     return this.ready;
   }
 
