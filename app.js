@@ -144,11 +144,19 @@ const isBrowse = () => !!MODES[mode].browse;
 const numOf = new Map();
 for (const m of Object.values(MODES)) if (m.browse) m.pool.forEach((p, i) => numOf.set(p.id, i + 1));
 const KIND_LABEL = { single: 'regular', typical: 'typical', easy_miss: 'easy miss', blunder_check: 'blunder check', drift: 'drift' };
+// Rating-trend flags from the miner (stratmine/flags.py): how p(best) changes with Elo.
+const TREND_LABEL = { rating_sensitive: 'rating-sensitive', engine_move: 'engine move?', none: 'no trend' };
+const TREND_TEXT = {
+  rating_sensitive: 'Rating-sensitive: stronger players find the best move much more often (a learnable skill, not taste).',
+  engine_move: 'Engine move?: stronger players find the best move less often; strong humans may avoid it.',
+};
+const trendOf = (p) => (p.flags && p.flags[0]) || 'none';
 const NATURE_LABEL = { positional: 'positional', positional_then_material: 'positional → material', concrete: 'concrete', marginal: 'marginal' };
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
   cat: { label: 'all categories', of: (p) => p.kind, name: (v) => KIND_LABEL[v] || v },
   nature: { label: 'all verdicts', of: (p) => p.nature && p.nature.kind, name: (v) => NATURE_LABEL[v] || v },
+  trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
   changed: {
     label: 'any',
     of: (p) => (!p.changed || p.nature.kind === 'marginal' ? 'n/a'
@@ -231,7 +239,7 @@ function fbSnapshot(p) {
     id: p.id, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
     played: p.played, minedBest: p.minedBest, best: p.line[0],
     kind: p.kind, timeClass: p.timeClass, timeControl: p.timeControl, maiaElo: p.maiaElo,
-    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, checks: p.checks,
+    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, flags: p.flags ?? null, checks: p.checks,
     playedLossNow: p.scores[p.played] ?? null,
     nature: p.nature?.kind ?? null,
     changedTop: p.changed?.explains && p.changed.terms.length ? p.changed.terms[0][0] : null,
@@ -395,7 +403,8 @@ function buildList() {
     const n = document.createElement('span'); n.className = 'n'; n.textContent = `#${numOf.get(id)}`;
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
-      p.nature ? NATURE_LABEL[p.nature.kind] : ''].filter(Boolean).join(' · ');
+      p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '']
+      .filter(Boolean).join(' · ');
     const st = document.createElement('span'); st.className = 'st';
     b.append(n, meta, st);
     b.addEventListener('click', () => !busy && loadPuzzle(i));
@@ -477,6 +486,13 @@ function loadPuzzle(i) {
   const tip = kindText.replace(/^[^:]+:\s*/, '');
   $('kind').title = tip.charAt(0).toUpperCase() + tip.slice(1);
   $('kind').setAttribute('aria-label', kindText);
+  const trend = isStrategy() ? trendOf(puzzle) : 'none';
+  const trendText = TREND_TEXT[trend] || '';
+  $('trend').hidden = !trendText;
+  $('trend').textContent = trendText ? TREND_LABEL[trend] : '';
+  const trendTip = trendText.replace(/^[^:]+:\s*/, '');
+  $('trend').title = trendTip.charAt(0).toUpperCase() + trendTip.slice(1);
+  $('trend').setAttribute('aria-label', trendText);
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
     + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
@@ -825,6 +841,15 @@ function showWhy(finished) {
   add('ok', `Maia p(best) at +${C.elo_delta} Elo (${puzzle.maiaElo + C.elo_delta}): ${pct(puzzle.pBestPlus)}`, `(min ${100 * C.p_best_strong_min}%)`);
   if (puzzle.pBestTop != null) {
     add('na', `Maia p(best) at ${C.elo_top || 2600} Elo: ${pct(puzzle.pBestTop)}`, '(info, not a check)');
+  }
+  if (puzzle.flags) {
+    const pts = (x) => Math.round(100 * x);
+    const gap = (x) => (x == null ? '?' : `${x >= puzzle.pBest ? '+' : '−'}${Math.abs(x - puzzle.pBest).toFixed(1)}`);
+    const top = C.elo_top || 2600;
+    const t = trendOf(puzzle);
+    const rule = t === 'engine_move' ? `(flag: −${pts(C.engine_drop_top)} at ${top} or −${pts(C.engine_drop_plus)} at +${C.elo_delta})`
+      : `(rating-sensitive needs +${pts(C.sensitive_plus)} at +${C.elo_delta} and +${pts(C.sensitive_top)} at ${top})`;
+    add('na', `Rating trend: ${TREND_LABEL[t]}, p(best) ${gap(puzzle.pBestPlus)} points at +${C.elo_delta}, ${gap(puzzle.pBestTop)} at ${top}`, rule);
   }
   add('na', `Your move: Maia ${pct(puzzle.pPlayed)}, #${K.myRank} at your Elo`, '(info, not a check)');
   const off = [];

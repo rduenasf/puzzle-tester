@@ -94,6 +94,13 @@ Categories (tag in the outputs, in this order):
   losing > 75; flags the worst move (floor 15cp) and runs it through the same checks.
   Has produced 0-1 problems on 730 games. Not tuned.
 
+Rating-trend flags (tags on top of the category; they never keep or drop a problem; §6.8):
+
+- **rating_sensitive** (shown as "rating-sensitive"): p(best) rises >= 10 points at my Elo
+  + 500 **and** >= 20 points at 2600. `--sensitive-plus --sensitive-top`.
+- **engine_move** (shown as "engine move?"): p(best) falls >= 10 points at 2600 **or** >= 5
+  points at + 500. `--engine-drop-top --engine-drop-plus`.
+
 The Lichess games produced no problems in any run.
 
 ### Volume history (730 games)
@@ -195,6 +202,29 @@ losses from strategic ones, and a big loss can still be strategic.
 - Watch: the material rule only looks 6 plies ahead, so a big loss with no material lost may
   be a slower tactic (a mating attack, material won on ply 8). Rate these with the
   `tactical` / `decided` tags.
+
+### 6.8 Rating-trend flags (2026-11-10)
+
+My request: flag problems where p(best) at my Elo differs a lot from p(best) at +500 and at
+2600. Rising = a skill stronger players have (the best kind to drill); falling = the §6.2
+concern, a move strong humans avoid. Tags, not checks, so they can be rated and filtered
+before anything is decided.
+
+- Measured on v6 (1,011 problems), gap = p(best) at the higher Elo minus at mine, in points:
+  +500 median +8.0 (10th/75th/90th pct -3.8 / +15.2 / +23.1); 2600 median +12.3
+  (-6.6 / +24.1 / +34.1).
+- Chosen thresholds: about the top quarter of both gaps. rating_sensitive needs both (a steady
+  rise, not just a jump at 2600): 291 problems (141 regular, 115 typical, 26 blunder check,
+  9 easy miss). engine_move takes either drop: 108 (63 regular, 22 typical, 16 easy miss,
+  7 blunder check). Gaps are compared at 0.1 point, as the files store them.
+- Rejected for now: a log-odds gap (>= 1.0, plus >= 10 points). It counts rare-but-learnable
+  moves better (4% -> 20%) and flags 341, more of them typical, but is harder to read.
+  Revisit if rating the flagged problems shows misses.
+- Rule in `stratmine/flags.py`, shared by `mine` (CSV `flags` column, PGN comment, report
+  counts), `export_site.py` (recomputes for CSVs mined before it), `addflags.py` (patches an
+  exported file in place) and `feedback.py` (a "rating trend" group).
+- Trainer: a second badge next to the category, a "Rating trend" filter in Review, and a
+  line in "Why this problem" with this problem's gaps.
 
 ## 7. Reference example: 20...Qb5
 
@@ -335,6 +365,9 @@ After changing site files, bump `VERSION` in `sw.js`.
 `mine` also reports Maia p(best) at a fixed 2600 Elo (`--elo-top`, info only, not a check).
 For an export made before that existed, `addtop.py ../strategic_review.js --csv work/v4_problems.csv`
 fills it in (Maia only, about a minute).
+
+`mine` and `export_site.py` add the rating-trend flags (§6.8). For an export made before
+them, `addflags.py ../strategic_review.js` adds them in place (no engine, instant).
 
 With ratings exported from the trainer:
 

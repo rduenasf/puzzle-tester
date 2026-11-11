@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from stratmine.__main__ import DEFAULT_SF  # noqa: E402
 from addclocks import WORK, add_clocks  # noqa: E402
 from stratmine.clocks import GameIndex  # noqa: E402
+from stratmine.flags import DEFAULTS as FLAG_DEFAULTS, rating_flags  # noqa: E402
 
 MATE_CP = 1000  # cap: any move that walks into / misses a mate counts as a 1000cp loss
 
@@ -74,6 +75,11 @@ def main():
     with ThreadPoolExecutor(a.workers) as ex:
         results = list(ex.map(lambda r: score_all(a.stockfish, r["fen"], a.depth), rows))
 
+    cfg = {}
+    if a.config:
+        with open(a.config, encoding="utf-8") as cf:
+            cfg = json.load(cf)
+    thr = {k: cfg.get(k) if cfg.get(k) is not None else v for k, v in FLAG_DEFAULTS.items()}
     out, changed = [], 0
     for i, (r, (best, line, ev, scores)) in enumerate(zip(rows, results), 1):
         board = chess.Board(r["fen"])
@@ -97,6 +103,10 @@ def main():
             "pBestPlus": float(r["p_best_plus"]),
             # p(best) at a fixed strong Elo (--elo-top); missing in runs before it existed
             **({"pBestTop": float(r["p_best_top"])} if r.get("p_best_top") not in (None, "") else {}),
+            # Rating-trend tags (stratmine/flags.py); recomputed for CSVs mined before them
+            "flags": (r["flags"].split() if "flags" in r else rating_flags(
+                float(r["p_best"]) / 100, float(r["p_best_plus"]) / 100,
+                float(r["p_best_top"]) / 100 if r.get("p_best_top") not in (None, "") else None, **thr)),
             "minedBest": mined_best,
             "timeControl": r.get("time_control", ""),
             # Values of each mining check (from the mining run, not the re-score above)
@@ -118,16 +128,14 @@ def main():
             f.write("  " + json.dumps(p, separators=(",", ":")) + ",\n")
         f.write("];\n")
         if a.config:
-            with open(a.config, encoding="utf-8") as cf:
-                cfg = json.load(cf)
             keep = ["depth", "skip_plies", "cp_min", "cp_max", "max_eval", "forcing_plies",
                     "max_forcing", "quiet_above", "max_material_lost", "shallow_depth",
                     "shallow_multipv", "p_best_min", "p_best_max", "elo_delta",
                     "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
-                    "blunder", "blunder_max",
+                    "blunder", "blunder_max", *FLAG_DEFAULTS,
                     "since", "maia_model", "elo_map"]
             f.write(f"export const {a.var}_CONFIG = "
-                    + json.dumps({k: cfg.get(k) for k in keep}) + ";\n")
+                    + json.dumps({k: thr.get(k, cfg.get(k)) for k in keep}) + ";\n")
     add_clocks(a.out, GameIndex([p for p in a.pgn.split(",") if os.path.exists(p)]))
     played_loss = sorted(p["scores"][p["played"]] for p in out)
     print(f"wrote {len(out)} problems -> {a.out}")

@@ -18,9 +18,13 @@ export_site.py --feedback uses the same key to leave out problems rated bad.
 import argparse
 import csv
 import json
+import os
 import statistics
 import sys
 from collections import Counter, defaultdict
+
+sys.path.insert(0, os.path.dirname(__file__))
+from stratmine.flags import rating_flags  # noqa: E402
 
 # Reason tag -> the check(s) it most likely points at (see MINING-DECISIONS.md §5).
 TAG_HINTS = {
@@ -57,6 +61,14 @@ FEATURES = {
 }
 
 
+
+def trend_of(p):
+    """The problem's rating-trend flag; recomputed (default thresholds) for older snapshots."""
+    flags = p.get("flags")
+    if flags is None and p.get("pBest") is not None and p.get("pBestPlus") is not None:
+        top = p.get("pBestTop")
+        flags = rating_flags(p["pBest"] / 100, p["pBestPlus"] / 100, None if top is None else top / 100)
+    return (flags or ["none"])[0]
 def load(paths):
     entries = {}
     for path in paths:
@@ -113,7 +125,8 @@ def main():
 
     print("\nRating by group (good / meh / bad, bad rate):")
     for name, of in (("category", lambda p: p["kind"]), ("verdict", lambda p: p.get("nature")),
-                     ("time class", lambda p: p["timeClass"]), ("what changed", lambda p: p.get("changedTop"))):
+                     ("time class", lambda p: p["timeClass"]), ("what changed", lambda p: p.get("changedTop")),
+                     ("rating trend", trend_of)):
         g = defaultdict(Counter)
         for e in rated:
             g[of(e["problem"])][e["rating"]] += 1

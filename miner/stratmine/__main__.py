@@ -87,6 +87,14 @@ def main(argv=None):
                    help="Fixed strong Elo whose Maia p(best) is reported (info, not a check)")
     m.add_argument("--p-best-strong-min", type=float, default=0.10,
                    help="Min Maia p(best) at my Elo + elo-delta")
+    m.add_argument("--sensitive-plus", type=float, default=0.10,
+                   help="rating_sensitive flag: p(best) rises at least this much at +elo-delta ...")
+    m.add_argument("--sensitive-top", type=float, default=0.20,
+                   help="... and at least this much at --elo-top (a tag, not a check)")
+    m.add_argument("--engine-drop-top", type=float, default=0.10,
+                   help="engine_move flag: p(best) falls at least this much at --elo-top ...")
+    m.add_argument("--engine-drop-plus", type=float, default=0.05,
+                   help="... or at least this much at +elo-delta (a tag, not a check)")
     m.add_argument("--p-gain-min", type=float, default=None,
                    help="Re-enable the check that p(best) rises by this much at +elo-delta (off by default)")
     m.add_argument("--no-typical", dest="typical", action="store_false",

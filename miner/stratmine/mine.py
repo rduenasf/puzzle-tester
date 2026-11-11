@@ -10,6 +10,7 @@ import chess
 import chess.pgn
 
 from .elo import to_maia
+from .flags import flags_from_args
 from .sf import MATE
 
 FILTERS = [
@@ -310,7 +311,7 @@ def mine(a, sf, maia):
     write_outputs(a, problems)
     if a.features:
         write_features(a.features, features)
-    report(stats, fails_any, drift_stats, drift_fails, len(problems), a)
+    report(stats, fails_any, drift_stats, drift_fails, problems, a)
     return problems
 
 
@@ -327,8 +328,9 @@ def write_outputs(a, problems):
             best_san = bb.san(rec["best"])
             my_san = bb.san(rec["move"])
             line = san_line(bb, rec["pv"])
+            flags = flags_from_args(a, rec["p_best"], rec["p_best_hi"], rec["p_best_top"])
             row = {
-                "id": n, "type": kind, "fen": bb.fen(),
+                "id": n, "type": kind, "flags": " ".join(flags), "fen": bb.fen(),
                 "side": "white" if bb.turn else "black",
                 "move_number": bb.fullmove_number,
                 "my_move": my_san, "best_move": best_san, "best_line": line,
@@ -372,7 +374,9 @@ def write_outputs(a, problems):
                     g.comment = (
                         f"{kind}. Maia@{my_elo}: p({my_san})={fmt_p(rec['p_my'])}% "
                         f"p({best_san})={fmt_p(rec['p_best'])}%; "
-                        f"@{my_elo + a.elo_delta}: p({best_san})={fmt_p(rec['p_best_hi'])}%"
+                        f"@{my_elo + a.elo_delta}: p({best_san})={fmt_p(rec['p_best_hi'])}%; "
+                        f"@{a.elo_top}: p({best_san})={fmt_p(rec['p_best_top'])}%"
+                        + (f"; flags: {', '.join(flags)}" if flags else "")
                         + (f"; drift window loss {rec['drift_total']}cp" if kind == "drift" else ""))
                 else:
                     g.comment = f"{'White' if bb.turn else 'Black'} to move. Enter your line."
@@ -399,7 +403,8 @@ def write_features(path, recs):
             w.writerow([r[k] for k in keys] + [r["move"].uci(), r["best"].uci(), r["board"].fen()])
 
 
-def report(stats, fails_any, drift_stats, drift_fails, n_problems, a):
+def report(stats, fails_any, drift_stats, drift_fails, problems, a):
+    n_problems = len(problems)
     p = lambda *x: print(*x, file=sys.stderr)
     p("\n=== mine: filter report ===")
     p(f"games analysed: {stats['games']}  (chess.com {stats['games_chesscom']}, "
@@ -424,5 +429,9 @@ def report(stats, fails_any, drift_stats, drift_fails, n_problems, a):
             if drift_stats["removed_" + k] or drift_fails[k]:
                 p(f"  {desc:42s} -{drift_stats['removed_' + k]:<5d}  (fails in total: {drift_fails[k]})")
         p(f"  kept drift: {drift_stats['kept_drift']}")
+    flagged = Counter(f for f in (flags_from_args(a, r["p_best"], r["p_best_hi"], r["p_best_top"])
+                                  for r, *_ in problems) for f in f)
+    p(f"  flags (tags, not checks): rating_sensitive {flagged['rating_sensitive']}, "
+      f"engine_move {flagged['engine_move']}")
     games = max(1, stats["games"])
     p(f"TOTAL problems: {n_problems}  ({n_problems / games:.2f} per game)")
