@@ -1084,8 +1084,10 @@ function render() {
   };
   // Only push a new position when it changed (setting fen also clears drawn shapes).
   if (fen !== shownFen) { cfg.fen = fen; shownFen = fen; }
-  cg.set(cfg);
+  // Arrows first: a flip in cg.set rebuilds the board at once with whatever arrows are set,
+  // and a redraw already queued for the old board then makes Chessground skip clearing them.
   cg.setAutoShapes(back ? [] : hints);
+  cg.set(cfg);
   renderEvalBar(pos, cfg.orientation);
 
   renderMoves(hist, at);
