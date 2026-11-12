@@ -390,6 +390,11 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .why li .ok { color: var(--accent); }
 .why li .na { color: var(--muted); }
 .why li small { color: var(--muted); }
+.maia-table { margin-top: 8px; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.maia-table th, .maia-table td { padding: 3px 4px; white-space: nowrap; text-align: right; border-bottom: 1px solid var(--line); }
+.maia-table th:first-child { text-align: left; }
+.maia-table thead th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
+.maia-table tbody th { font-weight: 500; }
 .why-note { margin: 8px 0 0; color: var(--muted); font-size: 0.8rem; }
 .wrong-text { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
 .wrong-text dt { font-weight: 600; color: var(--muted); font-size: 0.85em; padding-top: 0.15em; }

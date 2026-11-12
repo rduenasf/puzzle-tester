@@ -218,6 +218,9 @@ def main():
             "pBestPlus": float(r["p_best_plus"]),
             # p(best) at a fixed strong Elo (--elo-top); missing in runs before it existed
             **({"pBestTop": float(r["p_best_top"])} if r.get("p_best_top") not in (None, "") else {}),
+            # p(my move) at +elo_delta and at the top Elo; missing in older runs (addtop.py fills them)
+            **({"pPlayedPlus": float(r["p_my_plus"])} if r.get("p_my_plus") not in (None, "") else {}),
+            **({"pPlayedTop": float(r["p_my_top"])} if r.get("p_my_top") not in (None, "") else {}),
             # Rating-trend tags (stratmine/flags.py); recomputed for CSVs mined before them
             "flags": (r["flags"].split() if "flags" in r else rating_flags(
                 float(r["p_best"]) / 100, float(r["p_best_plus"]) / 100,

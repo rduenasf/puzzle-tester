@@ -1,4 +1,5 @@
-"""Add Maia p(best) at a fixed strong Elo ("pBestTop") to an exported problem file, in place.
+"""Add Maia p(best) and p(my move) at a fixed strong Elo ("pBestTop", "pPlayedTop") and p(my move)
+at +elo_delta ("pPlayedPlus") to an exported problem file, in place.
 
 For files exported before `mine` reported --elo-top. Rebuilds each position's move history
 from the source game, exactly as `mine` does, so no Stockfish work is needed.
@@ -52,6 +53,9 @@ def main():
 
     with open(a.js, encoding="utf-8") as f:
         lines = f.read().split("\n")
+    # The config line comes after the problems; read its elo_delta first (for p(my move) at +delta)
+    delta = next((json.loads(l.split(" = ", 1)[1].rstrip(";")).get("elo_delta") for l in lines
+                  if l.startswith("export const") and "_CONFIG = " in l), None)
     done = total = 0
     for i, line in enumerate(lines):
         if line.startswith("export const") and "_CONFIG = " in line:
@@ -64,21 +68,27 @@ def main():
             continue
         p = json.loads(line.strip().rstrip(","))
         total += 1
-        p.pop("pBestTop", None)
+        for k in ("pBestTop", "pPlayedTop", "pPlayedPlus"):
+            p.pop(k, None)
         game = index.get(p.get("link", ""))
         hist = history(game, p["fen"]) if game else None
         opp_elo = opp.get((p.get("link", ""), p["fen"]))
         if hist and opp_elo is not None:
-            (probs,) = maia.policy(hist, [a.elo], opp_elo)
+            elos = [a.elo] + ([p["maiaElo"] + delta] if delta else [])
+            probs, *plus = maia.policy(hist, elos, opp_elo)
             best = chess.Move.from_uci(p.get("minedBest") or p["line"][0])
+            played = chess.Move.from_uci(p["played"])
             p["pBestTop"] = round(100 * probs.get(best, 0.0), 1)
+            p["pPlayedTop"] = round(100 * probs.get(played, 0.0), 1)
+            if plus:
+                p["pPlayedPlus"] = round(100 * plus[0].get(played, 0.0), 1)
             done += 1
         else:
             print(f"  skipped {p['id']}: {'no game' if not game else 'position not found' if not hist else 'not in CSV'}")
         lines[i] = "  " + json.dumps(p, separators=(",", ":")) + ","
     with open(a.js, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines))
-    print(f"{a.js}: p(best) at {a.elo} for {done}/{total} problems")
+    print(f"{a.js}: p(best)/p(my move) at {a.elo} (and p(my move) at +{delta}) for {done}/{total} problems")
 
 
 if __name__ == "__main__":

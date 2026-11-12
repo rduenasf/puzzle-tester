@@ -272,7 +272,8 @@ function fbSnapshot(p) {
     id: p.id, name: p.name, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
     played: p.played, minedBest: p.minedBest, best: p.line[0],
     kind: p.kind, timeClass: p.timeClass, timeControl: p.timeControl, maiaElo: p.maiaElo,
-    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, flags: p.flags ?? null, checks: p.checks,
+    pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null,
+    pPlayedPlus: p.pPlayedPlus ?? null, pPlayedTop: p.pPlayedTop ?? null, flags: p.flags ?? null, checks: p.checks,
     playedLossNow: p.scores[p.played] ?? null,
     nature: p.nature?.kind ?? null,
     trapped: p.nature?.trapped ? p.nature.trapped.piece : null,
@@ -944,10 +945,10 @@ function showWhy(finished) {
   const box = $('why');
   const C = MODES[mode].config;
   const K = puzzle && puzzle.checks;
+  showMaia(finished);
   if (!isStrategy() || !C || !K) { box.hidden = true; return; }
   const list = $('why-list');
   list.textContent = '';
-  const pct = (x) => `${x.toFixed(1)}%`; // exported as percentages already
   const add = (state, label, value) => {
     const li = document.createElement('li');
     const mark = document.createElement('span');
@@ -980,11 +981,9 @@ function showWhy(finished) {
   const why = puzzle.pBest > hi ? 'above the range: miss'
     : puzzle.pBest < lo ? 'below the range: allowed because your move was Maia\'s #1'
     : 'in range';
-  add('ok', `Maia p(best) at your Elo (${puzzle.maiaElo}): ${pct(puzzle.pBest)}`, `(range ${lo}–${hi}%, ${why})`);
-  add('ok', `Maia p(best) at +${C.elo_delta} Elo (${puzzle.maiaElo + C.elo_delta}): ${pct(puzzle.pBestPlus)}`, `(min ${100 * C.p_best_strong_min}%)`);
-  if (puzzle.pBestTop != null) {
-    add('na', `Maia p(best) at ${C.elo_top || 2600} Elo: ${pct(puzzle.pBestTop)}`, '(info, not a check)');
-  }
+  // The values themselves are in the "Maia probabilities" table.
+  add('ok', `Maia p(best) at your Elo is ${why}`, `(range ${lo}–${hi}%)`);
+  add('ok', `Maia p(best) at +${C.elo_delta} Elo is high enough`, `(min ${100 * C.p_best_strong_min}%)`);
   if (puzzle.flags) {
     const pts = (x) => Math.round(100 * x);
     const gap = (x) => (x == null ? '?' : `${x >= puzzle.pBest ? '+' : '−'}${Math.abs(x - puzzle.pBest).toFixed(1)}`);
@@ -994,7 +993,6 @@ function showWhy(finished) {
       : `(rating-sensitive needs +${pts(C.sensitive_plus)} at +${C.elo_delta} and +${pts(C.sensitive_top)} at ${top})`;
     add('na', `Rating trend: ${TREND_LABEL[t]}, p(best) ${gap(puzzle.pBestPlus)} points at +${C.elo_delta}, ${gap(puzzle.pBestTop)} at ${top}`, rule);
   }
-  add('na', `Your move: Maia ${pct(puzzle.pPlayed)}, #${K.myRank} at your Elo`, '(info, not a check)');
   if (puzzle.seen) {
     add('na', `${seenText(puzzle)}${puzzle.repeat ? `: ${REPEAT_LABEL[puzzle.repeat]}` : ''}`,
       `(label needs a problem in 2+ games; opening = first ${C.opening_plies || 16} plies)`);
@@ -1007,6 +1005,42 @@ function showWhy(finished) {
     : '';
   $('why-note').textContent = `Values from the mining run (Stockfish depth ${C.depth}, Maia ${C.maia_model}).`
     + (off.length ? ` Turned off: ${off.join('; ')}.` : '') + differs;
+  box.hidden = false;
+}
+
+// "Maia probabilities": p(best) and p(my move) at my Elo, +elo_delta and the top Elo.
+function showMaia(finished) {
+  const box = $('maia');
+  const C = MODES[mode].config;
+  if (!isStrategy() || !C || !puzzle || puzzle.pBest == null) { box.hidden = true; return; }
+  const top = C.elo_top || 2600;
+  const pct = (x) => (x == null ? '–' : `${x.toFixed(1)}%`);
+  const rank = puzzle.checks && puzzle.checks.myRank;
+  const rows = [
+    [`${puzzle.maiaElo} (you)`, puzzle.pBest, puzzle.pPlayed, rank ? ` #${rank}` : ''],
+    [`${puzzle.maiaElo + C.elo_delta} (+${C.elo_delta})`, puzzle.pBestPlus, puzzle.pPlayedPlus, ''],
+    [`${top}`, puzzle.pBestTop, puzzle.pPlayedTop, ''],
+  ];
+  const best = finished ? sanOf(puzzle.fen, puzzle.minedBest || puzzle.line[0]) : '';
+  const mine = finished ? sanOf(puzzle.fen, puzzle.played) : '';
+  const head = $('maia-table').tHead.rows[0].cells;
+  head[1].textContent = best ? `p(${best})` : 'p(best)';
+  head[1].title = 'Maia p(best move)';
+  head[2].textContent = mine ? `p(${mine})` : 'p(my move)';
+  head[2].title = 'Maia p(my move)';
+  const body = $('maia-table').tBodies[0];
+  body.textContent = '';
+  for (const [label, b, m, extra] of rows) {
+    const tr = body.insertRow();
+    const th = document.createElement('th');
+    th.scope = 'row';
+    th.textContent = label;
+    tr.append(th);
+    tr.insertCell().textContent = pct(b);
+    tr.insertCell().textContent = pct(m) + (m == null ? '' : extra);
+  }
+  $('maia-note').textContent = `Chance Maia (${C.maia_model}) plays each move at that Elo; #n: your move's rank among its predictions at your Elo. Move names show once you've answered.`
+    + (puzzle.pPlayedPlus == null ? ' – : not in this export.' : '');
   box.hidden = false;
 }
 

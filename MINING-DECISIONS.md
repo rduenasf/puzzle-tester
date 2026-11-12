@@ -497,6 +497,10 @@ last of my turns, so the loss doesn't hold for 2 turns.
 - "Why this problem" (always visible) lists each check's value and threshold from the
   mining run; move names stay hidden until solved or revealed. "What went wrong" appears
   after solving or revealing.
+- "Maia probabilities" (always visible, below it) is a table of p(best) and p(my move) at my
+  Elo, +elo_delta and elo_top (2600). Why: how likely a stronger player is to play my move
+  says whether it is a level-specific habit or a move strong players also make. The p(best)
+  checks in "Why this problem" now show only pass/threshold, not the values.
 - Engine-noise disclosure: when the re-score's best move differs from the mining run's,
   the panel says so.
 
@@ -554,9 +558,9 @@ depth 16 (~25 min for 1,011 problems); `explain.py` and `whatchanged.py` take a 
 v7 (2026-11-11) is the first run with SF19 at depth 20; v6 and earlier were SF14 at depth 16.
 After changing site files, bump `VERSION` in `sw.js`.
 
-`mine` also reports Maia p(best) at a fixed 2600 Elo (`--elo-top`, info only, not a check).
+`mine` also reports Maia p(best) and p(my move) at a fixed 2600 Elo (`--elo-top`, info only, not a check).
 For an export made before that existed, `addtop.py ../strategic_review.js --csv work/v4_problems.csv`
-fills it in (Maia only, about a minute).
+fills it in, along with p(my move) at +elo_delta (Maia only, about a minute).
 
 `mine` and `export_site.py` add the rating-trend flags (§6.8). For an export made before
 them, `addflags.py ../strategic_review.js` adds them in place (no engine, instant).
