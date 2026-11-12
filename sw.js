@@ -1,5 +1,5 @@
 // Bump VERSION whenever any cached file changes.
-const VERSION = 'v43';
+const VERSION = 'v44';
 const CACHE = `mate-drills-${VERSION}`;
 // Engine files (Stockfish, ONNX Runtime: ~14 MB, plus the 46 MB Maia model from GitHub and the
 // 99 MB full Stockfish wasm from unpkg) are
