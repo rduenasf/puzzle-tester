@@ -76,6 +76,9 @@ def main(argv=None):
                    help="Use only the last N games (after --time-classes)")
     m.add_argument("--time-classes", default=None,
                    help="Comma list to keep, e.g. blitz,rapid (bullet, blitz, rapid, daily)")
+    m.add_argument("--exclude-tc", default="60+1",
+                   help="Comma list of TimeControl headers to skip ('' = none). 60+1: too fast "
+                        "for strategy (MINING-DECISIONS.md §5)")
     m.add_argument("--workers", type=int, default=12,
                    help="Parallel single-thread Stockfish processes for the deep pass (1 = off)")
     m.add_argument("--elo-bullet", type=int, default=1300)

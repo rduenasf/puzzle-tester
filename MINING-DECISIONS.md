@@ -62,6 +62,11 @@ verified** in the maia3 source).
   chess.com-based ~1700. Probably an unreliable rating.
 - Time class: estimated duration = base + 40 x increment (chess.com's rule). chess.com:
   bullet < 180s, blitz < 600s. Lichess: bullet < 180, blitz < 480, rapid < 1500.
+- Bullet 1+1 (`TimeControl` 60+1) is not mined (`--exclude-tc`, default `60+1`, 2026-11-11):
+  too fast to learn strategy from. Skipped at the header scan, so these games also don't count
+  towards a position's "reached in N games". The v8 export had 3 such problems; they were
+  removed from `strategic_review.js` by hand (none had a repeat label), and the next full mine
+  leaves them out on its own.
 
 ## 5. The mining pipeline (current defaults)
 

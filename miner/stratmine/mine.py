@@ -124,6 +124,7 @@ def label_repeats(a, problems, visits, stats):
 def mine(a, sf, maia):
     # Scan headers only, select games, then parse just those (the full export is 17k games).
     wanted = set(a.time_classes.split(",")) if a.time_classes else None
+    excluded = {t.strip() for t in (a.exclude_tc or "").split(",") if t.strip()}
     users = {u.strip().lower() for u in a.user.split(",")}
     since = a.since.replace("-", ".") if a.since else None
     selected = []  # (path, offset)
@@ -142,6 +143,9 @@ def mine(a, sf, maia):
                     skipped["games_nonstandard"] += 1
                     continue
                 if since and (h.get("UTCDate") or h.get("Date", "")) < since:
+                    continue
+                if h.get("TimeControl", "") in excluded:
+                    skipped["games_excluded_tc"] += 1
                     continue
                 if wanted and time_class(h.get("TimeControl"), a.inc_weight, site_of(h)) not in wanted:
                     continue
@@ -453,7 +457,7 @@ def report(stats, fails_any, drift_stats, drift_fails, problems, a):
     p("\n=== mine: filter report ===")
     p(f"games analysed: {stats['games']}  (chess.com {stats['games_chesscom']}, "
       f"lichess {stats['games_lichess']}; skipped without user: {stats['games_without_user']}, "
-      f"non-standard: {stats['games_nonstandard']})")
+      f"non-standard: {stats['games_nonstandard']}, excluded time control: {stats['games_excluded_tc']})")
     p(f"my moves after ply {a.skip_plies}: {stats['my_moves']}")
     p("single-move pipeline (sequential: each move counted at the first filter it fails):")
     p(f"  {'mate score before/after':42s} -{stats['removed_mate_score']}")

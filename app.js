@@ -206,9 +206,9 @@ const FILTERS = {
   phase: { label: 'any', of: phaseOf, name: (v) => (v === 'endgame' ? 'endgame' : 'opening/middlegame') },
   tc: {
     label: 'all time formats',
-    // "bullet" or "bullet 2+1": a class matches all its time controls
+    // Filter by class only; rows still show the time control ("bullet 2+1").
     of: (p) => `${p.timeClass} ${fmtTimeControl(p.timeControl)}`.trim(),
-    match: (p, v) => (v.includes(' ') ? FILTERS.tc.of(p) === v : p.timeClass === v),
+    match: (p, v) => p.timeClass === v,
   },
   status: {
     label: 'any status',
@@ -450,23 +450,16 @@ function fillFilters() {
       const n = (v) => pool().filter((p) => f.of(p) === v).length;
       for (const v of ['yes', 'no']) add(v, `${f.name(v)} (${n(v)})`);
     } else if (k === 'tc') {
-      const byClass = {};
-      for (const p of pool()) {
-        byClass[p.timeClass] ??= {};
-        const t = f.of(p);
-        byClass[p.timeClass][t] = (byClass[p.timeClass][t] || 0) + 1;
-      }
-      for (const [cls, tcs] of Object.entries(byClass)) {
-        const total = Object.values(tcs).reduce((x, y) => x + y, 0);
-        add(cls, `${cls}, all (${total})`);
-        for (const [t, c] of Object.entries(tcs).sort((x, y) => y[1] - x[1])) add(t, `  ${t} (${c})`);
-      }
+      const n = (v) => pool().filter((p) => f.match(p, v)).length;
+      for (const v of ['bullet', 'blitz', 'rapid']) add(v, `${v} (${n(v)})`);
     } else {
       const counts = {};
       for (const p of pool()) { const v = f.of(p); counts[v] = (counts[v] || 0) + 1; }
       for (const [v, c] of Object.entries(counts).sort((x, y) => y[1] - x[1])) add(v, `${f.name(v)} (${c})`);
     }
     sel.value = store.filters[k] || '';
+    // A saved value with no option any more (e.g. the old "bullet 2+1"): drop it.
+    if (sel.selectedIndex < 0) { sel.value = ''; store.filters[k] = ''; }
   }
   $('f-num').value = (store.filters.q || '').replace(/-/g, ' ');
 }
