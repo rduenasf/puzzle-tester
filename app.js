@@ -146,7 +146,8 @@ const numOf = new Map();
 // "stable-hazel-skimmer" → "Stable Hazel Skimmer"; a problem without a name shows its id as is.
 const nameOf = (p) => (p.name ? p.name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : p.id);
 for (const m of Object.values(MODES)) if (m.browse) m.pool.forEach((p, i) => numOf.set(p.id, i + 1));
-const KIND_LABEL = { single: 'regular', typical: 'typical', easy_miss: 'easy miss', blunder_check: 'blunder check', drift: 'drift' };
+// Display names only: the keys are the miner's category tags (feedback and flags use them).
+const KIND_LABEL = { single: 'normal', typical: 'wrong instinct', easy_miss: 'miss', blunder_check: 'blunder', drift: 'drift' };
 // Rating-trend flags from the miner (stratmine/flags.py): how p(best) changes with Elo.
 const TREND_LABEL = { rating_sensitive: 'rating-sensitive', engine_move: 'engine move?', none: 'no trend' };
 const TREND_TEXT = {
@@ -356,9 +357,34 @@ const queryOf = (s) => {
   return /^\d*$/.test(q) ? '' : q;
 };
 const matchesQuery = (p, q) => (p.name || '').includes(q) || p.id.includes(q);
+const matchOne = (p, k, v) => !v || (k === 'q' ? matchesQuery(p, v)
+  : !FILTERS[k] || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v));
 function filtered() {
-  return pool().filter((p) => Object.entries(store.filters).every(([k, v]) =>
-    !v || (k === 'q' ? matchesQuery(p, v) : !FILTERS[k] || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v))));
+  return pool().filter((p) => Object.entries(store.filters).every(([k, v]) => matchOne(p, k, v)));
+}
+// Set filters as [key, value], and how each reads on screen: "Phase: endgame", "Name: hazel".
+const activeFilters = () => Object.entries(store.filters).filter(([k, v]) => v && (k === 'q' || FILTERS[k]));
+function filterText(k, v) {
+  if (k === 'q') return `Name or id: "${v.replace(/-/g, ' ')}"`;
+  const sel = $(`f-${k}`);
+  const opt = [...sel.options].find((o) => o.value === v);
+  return `${sel.closest('label').firstChild.textContent.trim()}: ${(opt ? opt.textContent : v).replace(/\s*\(\d+\)$/, '').trim()}`;
+}
+// Nothing matches: say what the filter just changed has on its own, and which others hide it.
+function noMatchNote(changed) {
+  const v = store.filters[changed];
+  const mine = changed && v ? pool().filter((p) => matchOne(p, changed, v)) : [];
+  // Only the other filters that turn away at least one of those problems.
+  const hiding = activeFilters().filter(([k, x]) => k !== changed && mine.some((p) => !matchOne(p, k, x)));
+  if (!mine.length || !hiding.length) return 'No problems match these filters.';
+  const n = mine.length;
+  return `${filterText(changed, v)} has ${n} problem${n === 1 ? '' : 's'} on its own, but `
+    + `${n === 1 ? 'it is' : 'they are'} hidden by: ${hiding.map(([k, x]) => filterText(k, x)).join(', ')}.`;
+}
+// Outline the filters that are set, so one left on from earlier is easy to spot.
+function markActive() {
+  for (const k of Object.keys(FILTERS)) $(`f-${k}`).classList.toggle('on', !!store.filters[k]);
+  $('f-num').classList.toggle('on', !!store.filters.q);
 }
 function browseState() {
   let list = filtered();
@@ -443,15 +469,26 @@ function buildList() {
     return b;
   });
   const total = pool().length;
-  $('browser-summary').textContent = state.ids.length === total
-    ? `Problems (${total})` : `Problems (${state.ids.length} of ${total} match)`;
+  const on = activeFilters().length;
+  $('browser-summary').textContent = !on ? `Problems (${total})`
+    : `Problems (${state.ids.length} of ${total} match · ${on} filter${on === 1 ? '' : 's'} on)`;
+  $('browser-note').hidden = true;
+  markActive();
 }
-function applyFilters() {
+// changed: the filter key the person just changed ('q' for the name box), for the no-match note.
+function applyFilters(changed) {
   saveState();
   for (const k of Object.keys(FILTERS)) store.filters[k] = $(`f-${k}`).value;
   store.filters.q = queryOf($('f-num').value);
   if (!filtered().length) {
-    $('browser-summary').textContent = 'No problems match these filters';
+    // The puzzle on the board stays; the list empties so it doesn't look like nothing happened.
+    const on = activeFilters().length;
+    $('browser-summary').textContent = `Problems (0 of ${pool().length} match · ${on} filter${on === 1 ? '' : 's'} on)`;
+    $('browser-list').textContent = '';
+    rowEls = [];
+    $('browser-note').textContent = noMatchNote(changed);
+    $('browser-note').hidden = false;
+    markActive();
     return;
   }
   state = browseState();
@@ -461,7 +498,7 @@ function applyFilters() {
   if (puzzle && state.ids[state.index] === puzzle.id) renderProgress();
   else loadPuzzle(state.index);
 }
-for (const k of Object.keys(FILTERS)) $(`f-${k}`).addEventListener('change', () => !busy && applyFilters());
+for (const k of Object.keys(FILTERS)) $(`f-${k}`).addEventListener('change', () => !busy && applyFilters(k));
 $('f-reset').addEventListener('click', () => {
   if (busy) return;
   for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
@@ -471,7 +508,7 @@ $('f-reset').addEventListener('click', () => {
 let queryTimer = 0;
 $('f-num').addEventListener('input', () => {  // filter the list as you type
   clearTimeout(queryTimer);
-  queryTimer = setTimeout(() => !busy && applyFilters(), 150);
+  queryTimer = setTimeout(() => !busy && applyFilters('q'), 150);
 });
 $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id, the first match, or position N
   e.preventDefault();
@@ -862,10 +899,10 @@ function setDetail(text) {
 
 // "Why this problem": every mining check with its value and threshold.
 const KIND_TEXT = {
-  single: 'Regular: the best move is findable at your level (Maia p between the limits).',
-  typical: "Typical: your move was Maia's #1 prediction at your rating, so the minimum p(best) is waived.",
-  easy_miss: 'Easy miss: most players at your rating find the best move (p above the upper limit).',
-  blunder_check: 'Blunder check: a big loss (above the normal cp range) that still passes every other check, including the material rule.',
+  single: 'Normal: the best move is findable at your level (Maia p between the limits).',
+  typical: "Wrong instinct: your move was Maia's #1 prediction at your rating, so the minimum p(best) is waived.",
+  easy_miss: 'Miss: most players at your rating find the best move (p above the upper limit).',
+  blunder_check: 'Blunder: a big loss (above the allowed cp range) that still passes every other check, including the material rule.',
   drift: 'Drift: the worst move of four in a row that slowly lost ground.',
 };
 // Shown for every problem that has check data; move names only once it's finished.
@@ -892,8 +929,11 @@ function showWhy(finished) {
   };
   const plies = C.forcing_plies;
   add('ok', 'Category:', KIND_TEXT[puzzle.kind] || puzzle.kind);
-  add('ok', `cp loss ${K.cpLoss}`, C.blunder && C.blunder_max > C.cp_max
-    ? `(normal ${C.cp_min}–${C.cp_max}; blunder check up to ${C.blunder_max})`
+  // Drift has its own floor (the worst move of a slow slide), so cp_min doesn't apply to it.
+  add('ok', `cp loss ${K.cpLoss}`, puzzle.kind === 'drift' && C.drift_cp_min != null
+    ? `(drift: at least ${C.drift_cp_min}; ${C.drift_window} moves in a row lost ${C.drift_total}+ in total, none more than ${C.drift_max_single})`
+    : C.blunder && C.blunder_max > C.cp_max
+    ? `(allowed ${C.cp_min}–${C.cp_max}; blunder up to ${C.blunder_max})`
     : `(allowed ${C.cp_min}–${C.cp_max})`);
   add('ok', `Position was balanced: eval ${fmtEval(K.evalBefore)} for you`, `(limit ±${(C.max_eval / 100).toFixed(2)})`);
   add('ok', `Best line is quiet: ${K.forcing} checks/captures in its first ${plies} plies`, `(max ${C.max_forcing})`);
@@ -903,7 +943,7 @@ function showWhy(finished) {
     add('na', 'Material rule not needed', `(only for losses above ${C.quiet_above}cp)`);
   }
   const lo = 100 * C.p_best_min, hi = 100 * C.p_best_max;
-  const why = puzzle.pBest > hi ? 'above the range: easy miss'
+  const why = puzzle.pBest > hi ? 'above the range: miss'
     : puzzle.pBest < lo ? 'below the range: allowed because your move was Maia\'s #1'
     : 'in range';
   add('ok', `Maia p(best) at your Elo (${puzzle.maiaElo}): ${pct(puzzle.pBest)}`, `(range ${lo}–${hi}%, ${why})`);

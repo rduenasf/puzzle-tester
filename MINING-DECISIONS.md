@@ -86,10 +86,13 @@ my move; moves where I played the engine's best move; non-standard games.
 
 Categories (tag in the outputs, in this order):
 
+Trainer names (renamed 2026-11-11; the tags are unchanged): single = "normal", typical =
+"wrong instinct", easy_miss = "miss", blunder_check = "blunder", drift = "drift".
+
 - **easy_miss**: p(best) > 65%. Most players at my rating find it; I missed it.
 - **typical**: my move was Maia's #1 prediction at my Elo. The 20% minimum is waived
   (the engine move may be rare at my level), but check 7 still applies.
-- **single** (shown as "regular"): p(best) in 20-65%.
+- **single**: p(best) in 20-65%.
 - **blunder_check**: cp loss above 350 (up to 1000) that passes every other check. Checked
   first, so it wins over easy_miss and typical. `--no-blunder` drops it. See §6.7.
 - **drift**: windows of 4 consecutive moves of mine losing >= 80cp in total, none

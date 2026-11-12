@@ -351,6 +351,11 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 34px;
 }
 .filters input { width: 5.5em; }
+.filters select.on, .filters input.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.browser-note {
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--warn);
+  color: var(--text); font-size: 0.85rem;
+}
 .filters .go { display: flex; gap: 6px; align-items: end; }
 .filters button { min-height: 34px; padding: 6px 10px; font-size: 0.85rem; }
 .browser-list {

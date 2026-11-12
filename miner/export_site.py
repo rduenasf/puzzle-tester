@@ -253,7 +253,8 @@ def main():
             keep = ["depth", "skip_plies", "cp_min", "cp_max", "max_eval", "forcing_plies",
                     "max_forcing", "quiet_above", "max_material_lost", "p_best_min", "p_best_max", "elo_delta",
                     "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
-                    "blunder", "blunder_max", "opening_plies", *FLAG_DEFAULTS,
+                    "blunder", "blunder_max", "drift", "drift_window", "drift_total",
+                    "drift_max_single", "drift_cp_min", "opening_plies", *FLAG_DEFAULTS,
                     "since", "maia_model", "elo_map"]
             conf = {k: thr.get(k, cfg.get(k)) for k in keep}
             conf["export_depth"] = a.depth  # depth of the all-moves table (depth = mining)
