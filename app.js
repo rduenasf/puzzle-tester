@@ -160,6 +160,10 @@ const REPEAT_TEXT = {
 };
 const repeatOf = (p) => p.repeat || 'none';
 const seenText = (p) => (p.seen ? `Problem in ${p.seen.puzzles} of ${p.seen.games} games where you reached this position (${Math.round(100 * p.seen.puzzles / p.seen.games)}%)` : '');
+// Endgame = 6 or fewer pieces besides kings and pawns, both sides together (Lichess's rule;
+// MINING-DECISIONS.md §9.6).
+const isEndgame = (p) => (p.fen.split(' ')[0].match(/[nbrqNBRQ]/g) || []).length <= 6;
+const phaseOf = (p) => (isEndgame(p) ? 'endgame' : 'other');
 const NATURE_LABEL = { positional: 'positional', positional_then_material: 'positional → material', concrete: 'concrete', marginal: 'marginal' };
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
@@ -167,6 +171,7 @@ const FILTERS = {
   nature: { label: 'all verdicts', of: (p) => p.nature && p.nature.kind, name: (v) => NATURE_LABEL[v] || v },
   trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
   repeat: { label: 'any', of: repeatOf, name: (v) => REPEAT_LABEL[v] || v },
+  phase: { label: 'any', of: phaseOf, name: (v) => (v === 'endgame' ? 'endgame' : 'opening/middlegame') },
   changed: {
     label: 'any',
     of: (p) => (!p.changed || p.nature.kind === 'marginal' ? 'n/a'
@@ -252,6 +257,7 @@ function fbSnapshot(p) {
     pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, flags: p.flags ?? null, checks: p.checks,
     playedLossNow: p.scores[p.played] ?? null,
     nature: p.nature?.kind ?? null,
+    endgame: isEndgame(p),
     changedTop: p.changed?.explains && p.changed.terms.length ? p.changed.terms[0][0] : null,
     gameClock: p.gameClock ?? null,
   };
@@ -414,7 +420,7 @@ function buildList() {
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
       p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '',
-      p.repeat ? REPEAT_LABEL[p.repeat] : '']
+      p.repeat ? REPEAT_LABEL[p.repeat] : '', isEndgame(p) ? 'endgame' : '']
       .filter(Boolean).join(' · ');
     const st = document.createElement('span'); st.className = 'st';
     b.append(n, meta, st);

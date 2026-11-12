@@ -336,6 +336,22 @@ as a hint, not the engine's actual reasoning.
 Rule-based highlighting of changed features (weak squares, open files, pawn structure)
 was proposed and deferred in favour of engine-backed evidence.
 
+### 9.6 Endgame tag (2026-11-11)
+
+9 of my 11 notes on "shows up later / deep" problems were endgames. Definition: 6 or fewer
+pieces besides kings and pawns, both sides together (Lichess's game-phase rule), computed in
+the trainer from the FEN (Phase filter, "endgame" in the list). Measured on 1,101 problems:
+
+| Definition | Problems | My 11 notes |
+|---|---|---|
+| <= 4 pieces | 134 | 9 |
+| **<= 6 pieces (chosen)** | 227 | 9 |
+| <= 6 pieces, no queens | 159 | 9 |
+| Stockfish phase < 50% | 241 | 9 |
+| Stockfish strict endgame (non-pawn material <= 3915) | 71 | 5 |
+
+The two notes it misses are middlegames with queens on.
+
 ## 10. Trainer (the site)
 
 - Modes: Mate (original), Strategy (the first 41 problems), Review (current 861, browsable).
