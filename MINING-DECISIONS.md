@@ -67,7 +67,7 @@ verified** in the maia3 source).
 Stockfish pass: one depth-16 analysis per position after the opening, cached.
 cp loss = eval before my move minus eval after it, from my side.
 
-Skipped before any check: the first 12 plies; positions with a mate score before or after
+Skipped before any check: the first 10 plies (12 until 2026-11-11, §6.10); positions with a mate score before or after
 my move; moves where I played the engine's best move; non-standard games.
 
 | # | Check | Current rule | Flag(s) | History |
@@ -225,6 +225,26 @@ before anything is decided.
   exported file in place) and `feedback.py` (a "rating trend" group).
 - Trainer: a second badge next to the category, a "Rating trend" filter in Review, and a
   line in "Why this problem" with this problem's gaps.
+
+### 6.10 Repeated positions and opening mistakes (2026-11-11)
+
+Trigger: two Review problems with the same position from different games (move 8 after Nf6+,
+gxf6 both times). On v7 (1,101 problems, positions compared ignoring move counters): 3 positions
+were problems twice. Two were the same opening mistake in different games (plies 13 and 15);
+one came up twice in one game (plies 26 and 28, same move).
+
+- `--skip-plies` 12 -> 10: plies 11-12 (1-based) are now mined too.
+- Same game, same position, same move: only the first is kept (the later one teaches nothing
+  new). Same position with a different move: both are kept.
+- Each problem records `reached_games` (games where I was to move in that position after
+  `--skip-plies`) and `puzzle_games` (games where it became a problem, in any category). The
+  trainer shows "Problem in M of N games (x%)" when N > 1. A mistake means "would be a
+  problem", not "lost cp": a bad move rejected by a filter (e.g. the material rule) doesn't count.
+- A position that was a problem in 2+ games gets a label (not a category; it keeps its own):
+  `common_opening_mistake` within the first `--opening-plies` (16) plies, `repeated_position`
+  after. Both problems are kept: a repeated mistake is a habit, the most useful thing to drill.
+- Counts cover only the games in the run, so labels can change when games are added.
+- Problem ids hash link + FEN, so a dropped repeat's id (and its trainer progress) goes away.
 
 ## 7. Reference example: 20...Qb5
 

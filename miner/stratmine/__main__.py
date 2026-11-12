@@ -57,7 +57,11 @@ def main(argv=None):
     m.add_argument("--elo-rapid", type=int, default=1650, help="Also used for daily games")
     m.add_argument("--inc-weight", type=float, default=40,
                    help="Time class from base + W*increment (chess.com uses 40; 0 = base only)")
-    m.add_argument("--skip-plies", type=int, default=12)
+    m.add_argument("--skip-plies", type=int, default=10,
+                   help="Ignore the first N plies (half-moves) of every game")
+    m.add_argument("--opening-plies", type=int, default=16,
+                   help="Problems in the first N plies whose position was a problem in 2+ games are "
+                        "labelled common_opening_mistake; later ones repeated_position")
     m.add_argument("--cp-min", type=int, default=30)
     m.add_argument("--cp-max", type=int, default=350,
                    help="Top of the normal range; losses above it up to --blunder-max are the "

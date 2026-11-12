@@ -151,12 +151,22 @@ const TREND_TEXT = {
   engine_move: 'Engine move?: stronger players find the best move less often; strong humans may avoid it.',
 };
 const trendOf = (p) => (p.flags && p.flags[0]) || 'none';
+// Repeated positions (miner label_repeats, MINING-DECISIONS.md §6.10). seen = {games, puzzles}:
+// games where you reached the position, and games where it became a problem.
+const REPEAT_LABEL = { common_opening_mistake: 'common opening mistake', repeated_position: 'repeated position', none: 'not repeated' };
+const REPEAT_TEXT = {
+  common_opening_mistake: 'Common opening mistake: this opening position became a problem in more than one of your games.',
+  repeated_position: 'Repeated position: this position became a problem in more than one of your games.',
+};
+const repeatOf = (p) => p.repeat || 'none';
+const seenText = (p) => (p.seen ? `Problem in ${p.seen.puzzles} of ${p.seen.games} games where you reached this position (${Math.round(100 * p.seen.puzzles / p.seen.games)}%)` : '');
 const NATURE_LABEL = { positional: 'positional', positional_then_material: 'positional → material', concrete: 'concrete', marginal: 'marginal' };
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
   cat: { label: 'all categories', of: (p) => p.kind, name: (v) => KIND_LABEL[v] || v },
   nature: { label: 'all verdicts', of: (p) => p.nature && p.nature.kind, name: (v) => NATURE_LABEL[v] || v },
   trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
+  repeat: { label: 'any', of: repeatOf, name: (v) => REPEAT_LABEL[v] || v },
   changed: {
     label: 'any',
     of: (p) => (!p.changed || p.nature.kind === 'marginal' ? 'n/a'
@@ -403,7 +413,8 @@ function buildList() {
     const n = document.createElement('span'); n.className = 'n'; n.textContent = `#${numOf.get(id)}`;
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
-      p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '']
+      p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '',
+      p.repeat ? REPEAT_LABEL[p.repeat] : '']
       .filter(Boolean).join(' · ');
     const st = document.createElement('span'); st.className = 'st';
     b.append(n, meta, st);
@@ -493,6 +504,13 @@ function loadPuzzle(i) {
   const trendTip = trendText.replace(/^[^:]+:\s*/, '');
   $('trend').title = trendTip.charAt(0).toUpperCase() + trendTip.slice(1);
   $('trend').setAttribute('aria-label', trendText);
+  const rep = isStrategy() ? repeatOf(puzzle) : 'none';
+  const repText = REPEAT_TEXT[rep] ? `${REPEAT_TEXT[rep]} ${seenText(puzzle)}.` : '';
+  $('repeat').hidden = !repText;
+  $('repeat').textContent = repText ? REPEAT_LABEL[rep] : '';
+  const repTip = repText.replace(/^[^:]+:\s*/, '');
+  $('repeat').title = repTip.charAt(0).toUpperCase() + repTip.slice(1);
+  $('repeat').setAttribute('aria-label', repText);
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   $('subtitle').textContent = `${side(player)} to move`
     + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
@@ -853,6 +871,10 @@ function showWhy(finished) {
     add('na', `Rating trend: ${TREND_LABEL[t]}, p(best) ${gap(puzzle.pBestPlus)} points at +${C.elo_delta}, ${gap(puzzle.pBestTop)} at ${top}`, rule);
   }
   add('na', `Your move: Maia ${pct(puzzle.pPlayed)}, #${K.myRank} at your Elo`, '(info, not a check)');
+  if (puzzle.seen) {
+    add('na', `${seenText(puzzle)}${puzzle.repeat ? `: ${REPEAT_LABEL[puzzle.repeat]}` : ''}`,
+      `(label needs a problem in 2+ games; opening = first ${C.opening_plies || 16} plies)`);
+  }
   const off = [];
   if (!C.natural) off.push('p(your move) ≥ p(best)');
   if (C.p_gain_min == null) off.push(`p(best) rises at +${C.elo_delta}`);

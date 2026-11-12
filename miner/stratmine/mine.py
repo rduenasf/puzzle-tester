@@ -4,7 +4,8 @@ import csv
 import json
 import os
 import sys
-from collections import Counter
+import time
+from collections import Counter, defaultdict
 
 import chess
 import chess.pgn
@@ -82,6 +83,45 @@ def san_line(board, moves):
     return board.variation_san(moves) if moves else ""
 
 
+def pos_key(board):
+    """A position regardless of move counters: pieces, side to move, castling, legal e.p."""
+    return board.epd()
+
+
+def label_repeats(a, problems, visits, stats):
+    """Handle positions that were problems more than once (MINING-DECISIONS.md §6.10).
+
+    - Same game, same position, same move played: keep only the first.
+      Same position with a different move: keep both.
+    - Each problem records reached_games (games where I was to move in its position) and
+      puzzle_games (games where that position became a problem).
+    - A position that was a problem in 2+ games is labelled common_opening_mistake within
+      the first --opening-plies plies, repeated_position after.
+    `problems` must be sorted by (game, ply)."""
+    kept, moves_seen = [], defaultdict(set)  # (game, key) -> moves already kept
+    for p in problems:
+        rec = p[0]
+        k = (rec["game"], pos_key(rec["board"]))
+        if rec["move"] in moves_seen[k]:
+            stats["removed_repeat_same_move"] += 1
+            continue
+        moves_seen[k].add(rec["move"])
+        kept.append(p)
+    puzzle_games = defaultdict(set)
+    for rec, *_ in kept:
+        puzzle_games[pos_key(rec["board"])].add(rec["game"])
+    for rec, *_ in kept:
+        key = pos_key(rec["board"])
+        rec["reached_games"] = len(visits[key])
+        rec["puzzle_games"] = len(puzzle_games[key])
+        rec["repeat"] = ("" if rec["puzzle_games"] < 2
+                         else "common_opening_mistake" if rec["ply"] < a.opening_plies
+                         else "repeated_position")
+        if rec["repeat"]:
+            stats["label_" + rec["repeat"]] += 1
+    return kept
+
+
 def mine(a, sf, maia):
     # Scan headers only, select games, then parse just those (the full export is 17k games).
     wanted = set(a.time_classes.split(",")) if a.time_classes else None
@@ -137,6 +177,8 @@ def mine(a, sf, maia):
     drift_stats = Counter()
     drift_fails = Counter()
     problems, features = [], []
+    visits = defaultdict(set)  # position key -> games where I was to move in it (after skip-plies)
+    t_games = time.time()
 
     for gi, game in enumerate(games, 1):
         h = game.headers
@@ -170,6 +212,7 @@ def mine(a, sf, maia):
             if bb.turn != me or ply < a.skip_plies:
                 continue
             stats["my_moves"] += 1
+            visits[pos_key(bb)].add(gi)
             before = sf.analyse(bb, a.depth)
             after = sf.analyse(boards[ply + 1], a.depth)
             rec = {"game": gi, "ply": ply, "move": mv, "board": bb, "mate": False}
@@ -303,11 +346,15 @@ def mine(a, sf, maia):
                     chosen.add(worst["ply"])
                     worst["drift_total"] = sum(losses)
                     problems.append((worst, "drift", game, link, my_elo, opp_elo, tclass))
+        el = time.time() - t_games
         print(f"  game {gi}/{len(games)} {tclass} {'W' if me else 'B'} "
-              f"plies={len(moves)} problems so far={len(problems)}", file=sys.stderr, flush=True)
+              f"plies={len(moves)} problems so far={len(problems)}  "
+              f"{el / 60:.1f} min, eta {el / gi * (len(games) - gi) / 60:.1f} min",
+              file=sys.stderr, flush=True)
 
     sf.save()
     problems.sort(key=lambda p: (p[0]["game"], p[0]["ply"]))
+    problems = label_repeats(a, problems, visits, stats)
     write_outputs(a, problems)
     if a.features:
         write_features(a.features, features)
@@ -344,6 +391,8 @@ def write_outputs(a, problems):
                 "material_lost": rec["material_lost"],
                 "shallow_rank": rec["shallow_rank"],
                 "drift_total": rec.get("drift_total", ""),
+                "ply": rec["ply"], "repeat": rec["repeat"],
+                "reached_games": rec["reached_games"], "puzzle_games": rec["puzzle_games"],
                 "maia_elo": my_elo, "opp_maia_elo": opp_elo, "time_class": tclass,
                 "time_control": game.headers.get("TimeControl", ""),
                 "game": link, "date": game.headers.get("Date", ""),
@@ -433,5 +482,8 @@ def report(stats, fails_any, drift_stats, drift_fails, problems, a):
                                   for r, *_ in problems) for f in f)
     p(f"  flags (tags, not checks): rating_sensitive {flagged['rating_sensitive']}, "
       f"engine_move {flagged['engine_move']}")
+    p(f"repeats: dropped {stats['removed_repeat_same_move']} (same position and move later in "
+      f"the same game); labelled common_opening_mistake {stats['label_common_opening_mistake']} "
+      f"(ply < {a.opening_plies}), repeated_position {stats['label_repeated_position']}")
     games = max(1, stats["games"])
     p(f"TOTAL problems: {n_problems}  ({n_problems / games:.2f} per game)")

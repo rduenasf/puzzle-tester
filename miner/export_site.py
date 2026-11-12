@@ -108,6 +108,11 @@ def main():
                 float(r["p_best"]) / 100, float(r["p_best_plus"]) / 100,
                 float(r["p_best_top"]) / 100 if r.get("p_best_top") not in (None, "") else None, **thr)),
             "minedBest": mined_best,
+            # Repeated positions (MINING-DECISIONS.md §6.10); missing in runs before them.
+            # seen: games where I reached this position / games where it became a problem.
+            **({"repeat": r["repeat"]} if r.get("repeat") else {}),
+            **({"seen": {"games": int(r["reached_games"]), "puzzles": int(r["puzzle_games"])}}
+               if r.get("reached_games") not in (None, "") and int(r["reached_games"]) > 1 else {}),
             "timeControl": r.get("time_control", ""),
             # Values of each mining check (from the mining run, not the re-score above)
             "checks": {
@@ -132,7 +137,7 @@ def main():
                     "max_forcing", "quiet_above", "max_material_lost", "shallow_depth",
                     "shallow_multipv", "p_best_min", "p_best_max", "elo_delta",
                     "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
-                    "blunder", "blunder_max", *FLAG_DEFAULTS,
+                    "blunder", "blunder_max", "opening_plies", *FLAG_DEFAULTS,
                     "since", "maia_model", "elo_map"]
             f.write(f"export const {a.var}_CONFIG = "
                     + json.dumps({k: thr.get(k, cfg.get(k)) for k in keep}) + ";\n")
