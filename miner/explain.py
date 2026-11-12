@@ -9,7 +9,7 @@ For each problem:
   nature  = immediate | concrete (critical ply + move) | positional (never visible to the
             shallow search within the line) | marginal (re-score says the move is ~fine)
 
-  python explain.py ../strategic_review.js --cache work/sf_cache.json
+  python explain.py ../strategic_review.js   (cache: work/<engine's cache file>, see cache_for)
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ import chess
 import chess.engine
 
 sys.path.insert(0, os.path.dirname(__file__))
-from stratmine.__main__ import DEFAULT_SF  # noqa: E402
+from stratmine.__main__ import cache_for, default_stockfish  # noqa: E402
 from stratmine.mine import material  # noqa: E402
 
 CLAMP = 1000
@@ -85,11 +85,14 @@ def first_trap(fen, seq, me):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("js", help="Exported problems file to update in place")
-    ap.add_argument("--cache", default=os.path.join(os.path.dirname(__file__), "work", "sf_cache.json"))
+    ap.add_argument("--cache", default=None,
+                    help="The mining run's Stockfish cache (default: work/<this engine's cache file>)")
     ap.add_argument("--plies", type=int, default=12, help="Plies to follow after the decision (6 of your turns)")
     ap.add_argument("--shallow-depth", type=int, default=5,
                     help="Shallow value = median of the scores at depths 1..N")
-    ap.add_argument("--deep-depth", type=int, default=16, help="For punishment lines not in the cache")
+    ap.add_argument("--deep-depth", type=int, default=None,
+                    help="Depth of the punishment lines: the cache entries read and any searched "
+                         "here (default: the mining run's depth from the file's _CONFIG, else 16)")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--critical-share", type=float, default=0.5,
                     help="Critical ply = first ply where the shallow gap reaches this share of the loss")
@@ -100,15 +103,27 @@ def main():
                     help="Material lost within this many of your turns = concrete")
     ap.add_argument("--trap-gap", type=int, default=2,
                     help="Trapped piece counts only if I end the line this many pawns down vs the best line")
-    ap.add_argument("--stockfish", default=next((x for x in DEFAULT_SF if x and os.path.exists(x)), None))
+    ap.add_argument("--stockfish", default=default_stockfish())
     a = ap.parse_args()
+    if a.cache is None:
+        a.cache = os.path.join(os.path.dirname(__file__), "work", cache_for(a.stockfish))
 
     with open(a.js, encoding="utf-8") as f:
         lines = f.read().split("\n")
     idx = [i for i, l in enumerate(lines) if l.startswith("  {")]
     probs = [json.loads(lines[i].strip().rstrip(",")) for i in idx]
-    with open(a.cache, encoding="utf-8") as f:
-        cache = json.load(f)
+    if a.deep_depth is None:
+        cfg_line = next((l for l in lines if l.startswith("export const") and "_CONFIG = " in l), None)
+        cfg = json.loads(cfg_line.split(" = ", 1)[1].rstrip(";")) if cfg_line else {}
+        a.deep_depth = cfg.get("depth") or 16
+    # The mining run's cache for this engine. Missing (e.g. problems mined with another engine):
+    # every punishment line is searched at --deep-depth instead.
+    cache = {}
+    if os.path.exists(a.cache):
+        with open(a.cache, encoding="utf-8") as f:
+            cache = json.load(f)
+    else:
+        print(f"no cache at {a.cache}: searching every punishment line at depth {a.deep_depth}", flush=True)
     print(f"{len(probs)} problems; shallow depth {a.shallow_depth}, {a.plies} plies", flush=True)
 
     local = threading.local()
@@ -159,7 +174,7 @@ def main():
         played = chess.Move.from_uci(p["played"])
         after = board.copy(stack=False)
         after.push(played)
-        hit = cache.get(f"{after.fen()}|16|1")
+        hit = cache.get(f"{after.fen()}|{a.deep_depth}|1")
         if hit is not None:
             pv = [chess.Move.from_uci(u) for u in (hit[0]["pv"] if hit else [])]
         else:

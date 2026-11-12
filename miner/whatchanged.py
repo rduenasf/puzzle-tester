@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 import chess
 
 sys.path.insert(0, os.path.dirname(__file__))
-from stratmine.__main__ import DEFAULT_SF  # noqa: E402
+from stratmine.__main__ import SF14, engine_name  # noqa: E402
 
 TERMS = ["Pawns", "Knights", "Bishops", "Rooks", "Queens", "Mobility", "King safety",
          "Threats", "Passed", "Space"]
@@ -107,8 +107,14 @@ def main():
     ap.add_argument("--min-share", type=float, default=0.25,
                     help="Classical positional difference must be at least this share of the loss")
     ap.add_argument("--workers", type=int, default=12)
-    ap.add_argument("--stockfish", default=next((x for x in DEFAULT_SF if x and os.path.exists(x)), None))
+    ap.add_argument("--stockfish", default=SF14 if os.path.exists(SF14) else None,
+                    help="Stockfish 14.x (needs `Use NNUE false` and the classical `eval` trace)")
     a = ap.parse_args()
+    if not a.stockfish:
+        ap.error(f"Stockfish 14.x not found at {SF14}; pass --stockfish")
+    if not engine_name(a.stockfish).startswith("Stockfish 14"):
+        ap.error(f"{a.stockfish} is {engine_name(a.stockfish)!r}; whatchanged needs Stockfish 14.x "
+                 "(newer versions have no classical eval)")
 
     with open(a.js, encoding="utf-8") as f:
         lines = f.read().split("\n")

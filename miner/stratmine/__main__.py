@@ -1,22 +1,48 @@
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 
+# Stockfish 19 for all searches. Stockfish 14.1 only for whatchanged.py: it needs the classical
+# evaluation's term-by-term `eval` output, which Stockfish 16+ no longer has.
+SF19 = os.path.expanduser(r"~\.stockfish\sf19\stockfish\stockfish-windows-x86-64-universal.exe")
+SF14 = os.path.expanduser(r"~\.forwardchess\stockfish\stockfish-14-win\stockfish-14-x64.exe")
 DEFAULT_SF = [
     os.environ.get("STOCKFISH", ""),
     shutil.which("stockfish") or "",
-    os.path.expanduser(r"~\.forwardchess\stockfish\stockfish-14-win\stockfish-14-x64.exe"),
+    SF19,
 ]
 
 
+def default_stockfish():
+    return next((x for x in DEFAULT_SF if x and os.path.exists(x)), None)
+
+
+def engine_name(path):
+    """The engine's UCI `id name`, e.g. "Stockfish 19"."""
+    out = subprocess.run([path], input="uci\nquit\n", capture_output=True, text=True, timeout=30).stdout
+    return next((l[len("id name "):].strip() for l in out.splitlines() if l.startswith("id name ")), "")
+
+
+def cache_for(path):
+    """Cache file name for this engine. The cache keys hold no engine version, so each engine
+    gets its own file; Stockfish 14.x keeps the original sf_cache.json."""
+    name = engine_name(path)
+    if name.startswith("Stockfish 14"):
+        return "sf_cache.json"
+    return "sf_cache-" + "".join(c if c.isalnum() else "-" for c in name.lower()).strip("-") + ".json"
+
+
 def common(p):
-    p.add_argument("--stockfish", default=next((x for x in DEFAULT_SF if x and os.path.exists(x)), None),
-                   help="Stockfish binary (default: $STOCKFISH, PATH, or the forwardchess copy)")
+    p.add_argument("--stockfish", default=default_stockfish(),
+                   help="Stockfish binary (default: $STOCKFISH, PATH, or Stockfish 19 in ~/.stockfish)")
     p.add_argument("--threads", type=int, default=None)
     p.add_argument("--hash", type=int, default=256, help="Stockfish hash MB")
-    p.add_argument("--cache", default="sf_cache.json", help="Stockfish result cache")
-    p.add_argument("--depth", type=int, default=16)
+    p.add_argument("--cache", default=None,
+                   help="Stockfish result cache (default: one file per engine, see cache_for)")
+    p.add_argument("--depth", type=int, default=20,
+                   help="Single-line search depth for every decision (was 16 until 2026-11-11)")
     p.add_argument("--maia-model", default="maia3-23m", help="maia3-5m | maia3-23m | maia3-79m")
     p.add_argument("--checkpoint", default=None,
                    help="Local Maia-3 .pt file (architecture from --maia-model; skips Hugging Face)")
@@ -125,6 +151,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if not a.stockfish:
         ap.error("no Stockfish found; pass --stockfish")
+    if a.cache is None:
+        a.cache = cache_for(a.stockfish)
+    print(f"stockfish: {engine_name(a.stockfish)} ({a.stockfish}), cache {a.cache}", flush=True)
 
     from .maia import MaiaPolicy
     from .sf import Stockfish

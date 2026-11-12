@@ -20,7 +20,8 @@ My ratings when this started: chess.com bullet ~1300, blitz ~1500, rapid ~1650.
 | Piece | Choice | Notes |
 |---|---|---|
 | Python | 3.12 in `miner/.venv`, installed with `uv` (winget) | No system Python on this PC |
-| Engine | Stockfish 14.1, `~/.forwardchess/stockfish/stockfish-14-win/stockfish-14-x64.exe` | Override with `--stockfish` or `$STOCKFISH`. SF14 still has the classical (non-NNUE) eval, used in §9.4 |
+| Engine | Stockfish 19 (official `stockfish-windows-x86-64-universal`), `~/.stockfish/sf19/stockfish/` | Default for `mine`, `grade`, `export_site.py`, `explain.py` since 2026-11-10. Override with `--stockfish` or `$STOCKFISH`. Why: §8.1 |
+| Engine for §9.4 | Stockfish 14.1, `~/.forwardchess/stockfish/stockfish-14-win/stockfish-14-x64.exe` | Only `whatchanged.py`, which needs the classical (non-NNUE) eval's term-by-term output; SF16+ removed it. It refuses any other version |
 | Human model | Maia-3 23M (`--maia-model`), weights from Hugging Face `UofTCSSLab/Maia3-23M` | Runs on the RTX 3080 Ti. `--checkpoint file.pt` for a local file |
 | Maia policy | Full softmax over legal moves, computed by `stratmine/maia.py` reusing `Maia3UCIEngine` | The UCI output only gives the top-k. Uses the game's real last 8 positions as history |
 
@@ -64,7 +65,8 @@ verified** in the maia3 source).
 
 ## 5. The mining pipeline (current defaults)
 
-Stockfish pass: one depth-16 analysis per position after the opening, cached.
+Stockfish pass: one depth-20 single-line analysis per position after the opening, cached
+(depth 16 until v6; see §8.2).
 cp loss = eval before my move minus eval after it, from my side.
 
 Skipped before any check: the first 10 plies (12 until 2026-11-11, §6.10); positions with a mate score before or after
@@ -174,6 +176,9 @@ difference 23cp. The 30cp minimum is about the size of that noise. In the export
 the trainer's fresh depth-16 re-score picked a different best move in 162 (19%), and in 93
 my game move now scores within 30cp. Not fixed. Options: raise `--cp-min`, re-check
 candidates deeper, or require the mining and re-score runs to agree.
+Partly addressed 2026-11-11 (§8.2): mining at depth 20 with SF19, and the export keeps the
+mined best move, so the "different best move" case can no longer happen. The game move can
+still score under 30cp in the depth-16 table (8 test games: 2 of 15 problems).
 
 ### 6.6 Shallow search depth 3 -> 4 (2026-11-10)
 
@@ -302,16 +307,64 @@ It was the case that drove the cp range, the material rule and the easy-miss cat
   days.
 - Shallow (depth-4) searches use a separate single-thread process with a cleared hash,
   so the deep search's hash can't make them deeper.
-- Cache: `miner/work/sf_cache.json`, keyed by full FEN + depth + multipv. Keying by
+- Cache: one file per engine in `miner/work/`, keyed by full FEN + depth + multipv. The keys
+  hold no engine version, so `cache_for()` picks the file from the engine's UCI name:
+  Stockfish 14.x keeps `sf_cache.json` (all runs up to v5), Stockfish 19 uses
+  `sf_cache-stockfish-19.json`. `explain.py` reads the same engine's file. Keying by
   position only (ignoring move counters) was measured and rejected: repeats after ply 12
   are 0.3-1.7% of positions.
+
+### 8.1 Why Stockfish 19: SF14's MultiPV scores (2026-11-10)
+
+Reported on Review #753: the table said Ne5 loses 119cp, but it is about equal to Qf7
+(0 vs 0 searched alone at depth 24). The cause was `export_site.py` scoring every legal
+move with one SF14 MultiPV search (52 lines, depth 16):
+
+- In SF14 a move's score depends on which other moves share the search. #753 depth 16:
+  Ne5 alone -8 at every hash size; with 2 lines (all moves allowed) -82; with 54 lines
+  -86, while Qf7 came out +33 (alone -7). Restricting the root to just Qf7 and Ne5 gave
+  -18 / -23. Raw UCI gives the same, so it is not the python-chess wrapper.
+- More hash helps some positions (r508) but not most: r606, r027, r781, r968 stayed
+  50-150cp off with the table under 5% full.
+- Of 40 random Review problems, 9 had a move within 250cp of the best off by >= 60cp.
+- Likely cause (not proven): SF14 sets a per-line "trend" (dynamic contempt) from each
+  line's previous score and applies it in the classical eval, which SF14 still mixes in;
+  all lines also share history tables and the TT.
+- Stockfish 18 (the trainer's in-browser lite build) and Stockfish 19 (native) mostly
+  don't have it. SF19, all lines vs each move alone, depth 16 / 20: #753 Ne5 0 / 0 (best
+  move), r027 Bc6 46 vs 44, r457 Qb1 63 vs 53, r781 Nh4 75 vs 82, r968 Bd4 81 vs 86.
+  Remaining gaps: r508 Rad8 74 vs 44 at depth 16, r606's two losing moves (both > 150).
+- The mining thresholds (cp range, shallow-search check, explain's marginal 30cp) were
+  tuned on SF14 numbers; a re-mine with SF19 will select a somewhat different set.
+- SF19 all-moves vs each move alone (depth 20), the same 40 random problems: a move within
+  250cp off by >= 60cp in 10/40 at export depth 16, 5/40 at depth 20 (SF14: 9/40). But the
+  SF19 misses are on bad moves (shown as less bad, e.g. r606 Qg6 246 vs 493), not near-best
+  ones; median difference 8cp (16) / 7cp (20). Moves on the other side of 30cp: 46 / 41,
+  the size of single-search noise itself (#753 b5 alone: 59 at depth 16, 10 at depth 20).
+
+### 8.2 Depths: mining 20, export 16; the export keeps the mined best (2026-11-11)
+
+- Mining decides (cp loss, best move, line, eval) with one single-line search per position,
+  now at depth 20. Measured on 36 recent games (2,116 positions, 12 x 1 thread): SF14 depth 16
+  15.9 pos/s; SF19 depth 16 32.1; SF19 depth 20 5.9 (5.5x depth 16). About 4.5 h for v6's
+  730 games. Both v6 logs: SF14 export re-score picked a different best move in 189/1011.
+- Single-thread engines: SF19 depth 16 on the same positions, engines x threads: 12 x 1
+  32.8 pos/s, 6 x 2 12.1, 3 x 4 5.7, 1 x 12 1.5. Lazy SMP threads search the same tree, so at
+  a fixed depth they add work instead of dividing it; positions are independent.
+- The export's all-moves table (depth 16, ~25 min for 1,011 problems; depth 20 would be
+  ~1.5-2 h) only grades the alternatives. `line`, `eval` and `minedBest` come from the mining
+  CSV, so line[0] == minedBest always. Losses are measured from the table's own value for the
+  mined best (one scale; depth-20 and depth-16 evals differ, e.g. #753 Qf7 -20 vs -7); moves
+  the table rates above it count as 0. The game move is graded with the table's number;
+  "Why this problem" keeps the mining number (`checks.cpLoss`).
+- `explain.py` reads punishment lines from the cache at the mining depth (from _CONFIG).
 - The PC slept overnight during one run; long runs now request keep-awake.
 
 ## 9. Explaining a mistake (trainer "What went wrong")
 
 ### 9.1 Punishment line
 
-My game move followed by Stockfish's depth-16 line from the mining cache, 12 plies.
+My game move followed by Stockfish's line from the mining cache (mining depth), 12 plies.
 "Show punishment" and "Show best line" play them on the board.
 
 ### 9.2 Quick-look eval trace
@@ -351,7 +404,7 @@ My game move followed by Stockfish's depth-16 line from the mining cache, 12 pli
 
 ### 9.4 "What changed" from the classical eval
 
-Stockfish 14 with `Use NNUE false` prints classical eval terms (mobility, king safety,
+Stockfish 14.1 (kept for this alone, §2) with `Use NNUE false` prints classical eval terms (mobility, king safety,
 threats, pawns, ...). Validation on 200 problems: the classical positional terms agreed
 the move was worse only 60-71% of the time, correlation with the real loss +0.2 to +0.25
 (about 0 on my very next turn). So it is shown only when the classical total is positive
@@ -402,7 +455,8 @@ last of my turns, so the loss doesn't hold for 2 turns.
 
 - Modes: Mate (original), Strategy (the first 41 problems), Review (current 861, browsable).
 - Strategy and Review problems are one move. Every legal move is pre-scored by Stockfish at
-  depth 16, so grading needs no engine in the browser: Best <= 10cp, Good <= 30cp count
+  depth 16 (`export_depth`), losses measured from the mined best move (§8.2), so grading needs no
+  engine in the browser: Best <= 10cp, Good <= 30cp count
   as solved; Inaccuracy <= 75, Mistake <= 150, Blunder above.
 - Review: numbered list (#1-#861 in export order; **a re-export renumbers**), filters by
   category, verdict, what changed, time format and status, and Go to #. On screens >= 1200px
@@ -453,8 +507,18 @@ cd .. && .venv/Scripts/python.exe export_site.py work/v5_problems.csv --out work
 cp work/review.js ../strategic_review.js
 ```
 
-`mine` writes `*_config.json` with the thresholds used. `export_site.py` scores every legal
-move (~40 min for 861 problems); `explain.py` and `whatchanged.py` take a few minutes each.
+`export_site.py` caches each problem's raw per-move scores in
+`work/export_cache-<engine>.json`, keyed by full FEN + depth like the mining cache (raw
+scores, not losses, since losses depend on the mined best move), so a re-export only searches
+new positions. Each search stops after `--time-limit` (600s); one that hits it keeps the depth
+it reached, is reported, and is cached (`--rescore-timeouts` retries those; `--no-cache` skips
+the cache). Both `mine` and `export_site.py` print progress with an ETA; to watch a background
+run, tail its log (`Get-Content work8_export.log -Wait`).
+
+`mine` writes `*_config.json` with the thresholds used. Mining at depth 20 takes ~4.5 h of
+Stockfish for ~730 games (keep the PC awake). `export_site.py` scores every legal move at
+depth 16 (~25 min for 1,011 problems); `explain.py` and `whatchanged.py` take a few minutes each.
+v7 (2026-11-11) is the first run with SF19 at depth 20; v6 and earlier were SF14 at depth 16.
 After changing site files, bump `VERSION` in `sw.js`.
 
 `mine` also reports Maia p(best) at a fixed 2600 Elo (`--elo-top`, info only, not a check).
