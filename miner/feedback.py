@@ -30,7 +30,7 @@ from stratmine.flags import rating_flags  # noqa: E402
 TAG_HINTS = {
     "tactical": "check 3 (--max-forcing / --forcing-plies) or check 4 (--max-material-lost)",
     "noise": "engine noise, §6.5: raise --cp-min or require mining and re-score to agree",
-    "deep": "check 5 (--shallow-depth / --shallow-multipv)",
+    "deep": "Maia checks (--p-best-strong-min / --p-best-min); the quick-search check was dropped 2026-11-11",
     "obvious": "upper p(best) bound (--p-best-max) / the easy_miss category",
     "unclear": "explanation side (explain.py / whatchanged.py), or the line is too long",
     "engine_move": "check 7 (--p-best-strong-min / --elo-delta) or --p-best-min",
@@ -49,7 +49,7 @@ FEATURES = {
     "|eval before|": lambda p: abs(p["checks"]["evalBefore"]),
     "forcing moves in best line": lambda p: p["checks"]["forcing"],
     "material lost": lambda p: p["checks"].get("materialLost"),
-    "depth-3 rank of best": lambda p: p["checks"].get("shallowRank"),
+    "quick-search rank of best (runs before 2026-11-11)": lambda p: p["checks"].get("shallowRank"),
     "Maia rank of my move": lambda p: p["checks"].get("myRank"),
     "p(best) %": lambda p: p["pBest"],
     "p(best) at +delta %": lambda p: p["pBestPlus"],

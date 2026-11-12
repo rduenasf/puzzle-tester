@@ -120,7 +120,6 @@ def main():
                 "evalBefore": int(r["eval_before"]),
                 "forcing": int(r["forcing_in_line"]),
                 "materialLost": int(r["material_lost"]) if r.get("material_lost") not in (None, "") else None,
-                "shallowRank": int(r["shallow_rank"]) if r["shallow_rank"] not in ("", "None") else None,
                 "myRank": int(r["maia_rank_my"]) if r.get("maia_rank_my") not in (None, "") else None,
             },
         })
@@ -134,8 +133,7 @@ def main():
         f.write("];\n")
         if a.config:
             keep = ["depth", "skip_plies", "cp_min", "cp_max", "max_eval", "forcing_plies",
-                    "max_forcing", "quiet_above", "max_material_lost", "shallow_depth",
-                    "shallow_multipv", "p_best_min", "p_best_max", "elo_delta",
+                    "max_forcing", "quiet_above", "max_material_lost", "p_best_min", "p_best_max", "elo_delta",
                     "p_best_strong_min", "elo_top", "p_gain_min", "natural", "typical", "easy_miss",
                     "blunder", "blunder_max", "opening_plies", *FLAG_DEFAULTS,
                     "since", "maia_model", "elo_map"]

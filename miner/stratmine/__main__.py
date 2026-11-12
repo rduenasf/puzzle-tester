@@ -79,10 +79,6 @@ def main(argv=None):
     m.add_argument("--forcing-plies", type=int, default=6)
     m.add_argument("--max-forcing", type=int, default=2,
                    help="Max checks/captures/promotions in the first forcing-plies of the best line")
-    m.add_argument("--shallow-depth", type=int, default=4,
-                   help="Depth of the quick search that must have the best move in its top "
-                        "--shallow-multipv (was 3 until 2026-11-10)")
-    m.add_argument("--shallow-multipv", type=int, default=3)
     m.add_argument("--p-best-min", type=float, default=0.20)
     m.add_argument("--p-best-max", type=float, default=0.65)
     m.add_argument("--elo-delta", type=int, default=500,

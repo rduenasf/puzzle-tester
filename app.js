@@ -868,7 +868,6 @@ function showWhy(finished) {
   } else {
     add('na', 'Material rule not needed', `(only for losses above ${C.quiet_above}cp)`);
   }
-  add('ok', `No deep calculation: a depth-${C.shallow_depth} search ranks the best move #${K.shallowRank}`, `(needs top ${C.shallow_multipv})`);
   const lo = 100 * C.p_best_min, hi = 100 * C.p_best_max;
   const why = puzzle.pBest > hi ? 'above the range: easy miss'
     : puzzle.pBest < lo ? 'below the range: allowed because your move was Maia\'s #1'

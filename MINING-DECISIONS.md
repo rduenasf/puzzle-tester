@@ -1,6 +1,6 @@
 # Decision record: mining strategic problems from my games
 
-Status: living document. Last updated 2026-11-10.
+Status: living document. Last updated 2026-11-11.
 Owner: Rodrigo (chess.com `real_Holimion`, Lichess `rduenasf`).
 
 This records what the miner (`miner/`, git-ignored, local only) and the trainer's
@@ -76,7 +76,7 @@ my move; moves where I played the engine's best move; non-standard games.
 | 2 | Balanced position | \|eval before\| <= 150 | `--max-eval` | Unchanged |
 | 3 | Best line is quiet | <= 2 checks/captures/promotions in the first 6 plies of the best line | `--max-forcing --forcing-plies` | Unchanged |
 | 4 | Big loss isn't just dropped material | For losses > 150: after 6 plies of the opponent's best reply I'm down at most 1 pawn vs before my move | `--quiet-above --max-material-lost` | New. See §6.3 |
-| 5 | No deep calculation | A depth-4 multipv-3 search has the engine's move in its top 3 | `--shallow-depth --shallow-multipv` | Was depth 3 until 2026-11-10. See §6.6 |
+| ~~5~~ | ~~No deep calculation~~ | Dropped 2026-11-11 (a depth-4 multipv-3 search had to have the engine's move in its top 3) | removed | See §6.6, §6.9 |
 | 6 | Best move findable at my level | Maia p(best) at my Elo in 20-65%, **or** an exception below | `--p-best-min --p-best-max` | Exceptions added |
 | 7 | Stronger players find it | Maia p(best) at my Elo + 500 >= 10% | `--elo-delta --p-best-strong-min` | New |
 | off | p(best) rises at +delta | p(best) at +delta >= p(best) + 5 points | `--p-gain-min 0.05` re-enables | Removed. See §6.2 |
@@ -113,11 +113,18 @@ The Lichess games produced no problems in any run.
 | + gain check off, typical category | 1,091 | 1.49 |
 | + p(best) at +500 >= 10% | 861 | 1.18 |
 | + shallow search depth 3 -> 4 | 939 | 1.29 |
-| + blunder_check 350-1000cp (**current**, v6) | 1,011 | 1.38 |
+| + blunder_check 350-1000cp (v6) | 1,011 | 1.38 |
+| SF14 depth 16 -> SF19 depth 20 (v7, first run) | 1,001 | 1.37 |
+| - quick-search check (**current**, v7) | 1,101 | 1.51 |
 
-Current split: 456 regular, 389 typical, 94 easy miss, 72 blunder check (v6; the bullet/blitz
-split below is v5); 852 bullet (all 2+1), 83 blitz
-(3+2 x67, 5+0 x16), 4 rapid.
+Current split (v7, quick check dropped): 505 regular, 414 typical, 93 easy miss, 88 blunder
+check, 1 drift. First v7 run: 920 bullet (918 at 2+1), 74 blitz (3+2 x57, 5+0 x17), 7 rapid.
+
+v6 -> v7 (first run, still with the quick check) changed the set more than the total suggests: 524 problems in both, 487 dropped, 477
+new. Of the dropped, 165 lose under 30cp at depth 20 (likely v6 false positives). Of the new,
+169 failed v6's shallow check and 145 v6's |eval| <= 150 (the depth-20 best move or eval
+differs). In shared problems the game move's mining loss fell by a median of 28cp. Checks were
+tuned on SF14 numbers; the total barely moved, so they were left as they are.
 
 ## 6. Decisions and the reasoning behind them
 
@@ -225,6 +232,27 @@ before anything is decided.
   exported file in place) and `feedback.py` (a "rating trend" group).
 - Trainer: a second badge next to the category, a "Rating trend" filter in Review, and a
   line in "Why this problem" with this problem's gaps.
+
+### 6.9 Quick-search check dropped (2026-11-11)
+
+Trigger: #753 (Rxe1, 78cp). At depth 20 the best move is Ne5 (0), with Qf7 almost equal (-9);
+the depth-4 search had Qf7 #1 but Ne5 #5-6 (-253: it sees a pawn lost, not the compensation),
+so check 5 removed a problem whose quick-look move is good. Measured on v7 (SF19 depth 20):
+
+- Of 2,287 moves passing checks 1-4, check 5 rejected 420; Maia checks 6-7 rejected 320 of those
+  anyway. Alone it removed 100 (median p(best) 23% / +500 27%, vs 30% / 40% for kept problems).
+- Its verdict on those 100 was mostly engine state: the best move was in the top 3 for 0/100
+  with a cleared engine (as the miner runs it), 44/100 with a warm one. Asking for 6 lines
+  instead of 3 changed the top 3 itself in 94/100.
+- "Depth 4" is not 4 plies: reductions cut weak-looking quiet moves to 2-3 plies, quiescence
+  extends captures (one #753 line reached 11 plies). It does not model what I can calculate.
+- Alternatives measured and rejected: top 6 of a 6-line search (76/100 back, but drops 8 kept
+  problems and passes 39 where every move ranked above the best is 30cp+ worse); a quick top-3
+  move within 15cp of the best at depth 20 (52/100 back with the miner's cleared search).
+  A weak Stockfish (UCI_Elo 1600) is the same shallow search plus random error; Maia is the
+  human model.
+- Decision: drop it; Maia p(best) (checks 6-7) decides human findability. In the trainer,
+  #753 now grades Ne5 0, Qf7 7, Rxe1 96.
 
 ### 6.10 Repeated positions and opening mistakes (2026-11-11)
 

@@ -19,7 +19,6 @@ FILTERS = [
     ("eval_bound", "|eval before| <= max-eval"),
     ("forcing", "best line mostly non-forcing"),
     ("quiet_punishment", "big loss doesn't just drop material"),
-    ("shallow", "depth-N multipv top-K has deep-best"),
     ("p_best_range", "Maia p(best) at my Elo in range"),
     ("p_best_strong", "Maia p(best) at Elo+delta >= min"),
     ("p_best_gain", "Maia p(best) rises at Elo+delta"),
@@ -245,9 +244,6 @@ def mine(a, sf, maia):
                                                    a.forcing_plies)
                 rec["material_lost"] = material_lost(bb, rec["after_board"], rec["refutation"],
                                                      a.forcing_plies)
-                sh = sf.analyse(bb, a.shallow_depth, a.shallow_multipv)
-                rec["shallow_rank"] = next((i + 1 for i, l in enumerate(sh)
-                                            if l.pv and l.pv[0] == rec["best"]), None)
                 hist = boards[max(0, rec["ply"] - 7): rec["ply"] + 1]
                 p_lo, p_hi, p_top = maia.policy(hist, [my_elo, my_elo + a.elo_delta, a.elo_top],
                                                 opp_elo)
@@ -266,7 +262,6 @@ def mine(a, sf, maia):
                 # (a hanging piece, a fork): the loss must come from the position.
                 "quiet_punishment": (rec["cp_loss"] <= a.quiet_above
                                      or rec["material_lost"] <= a.max_material_lost),
-                "shallow": rec["shallow_rank"] is not None,
                 # Easy miss: the best move is easy at my level (p > --p-best-max).
                 # Typical: my move was Maia's top choice at my level, so the minimum
                 # p(best) doesn't apply (the engine move may be rare at my rating).
@@ -294,7 +289,7 @@ def mine(a, sf, maia):
             if rec["move"] == rec["best"]:
                 stats["removed_played_best"] += 1
                 continue
-            # Only pay for Maia / shallow search where cp loss is anywhere near interesting.
+            # Only pay for Maia where cp loss is anywhere near interesting.
             if rec["cp_loss"] < min(a.cp_min, a.drift_cp_min):
                 stats["removed_cp_range"] += 1
                 fails_any["cp_range"] += 1
@@ -389,7 +384,6 @@ def write_outputs(a, problems):
                 "p_best_top": fmt_p(rec["p_best_top"]),
                 "forcing_in_line": rec["forcing"], "forcing_in_punishment": rec["ref_forcing"],
                 "material_lost": rec["material_lost"],
-                "shallow_rank": rec["shallow_rank"],
                 "drift_total": rec.get("drift_total", ""),
                 "ply": rec["ply"], "repeat": rec["repeat"],
                 "reached_games": rec["reached_games"], "puzzle_games": rec["puzzle_games"],
@@ -443,7 +437,7 @@ def write_outputs(a, problems):
 
 
 def write_features(path, recs):
-    keys = ["game", "ply", "cp_loss", "ev_before", "ev_after", "forcing", "ref_forcing", "material_lost", "shallow_rank",
+    keys = ["game", "ply", "cp_loss", "ev_before", "ev_after", "forcing", "ref_forcing", "material_lost",
             "p_my", "my_rank", "p_best", "p_best_hi"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
