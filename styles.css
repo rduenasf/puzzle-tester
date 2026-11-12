@@ -289,6 +289,8 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .mv.no { background: rgba(185, 71, 61, 0.15); color: var(--bad); }
 .mv.no::after { content: " ✗"; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row2.help { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); } /* 2 or 3 equal buttons */
+.row2.help button { padding-inline: 4px; font-size: 0.85rem; }
 .help button { min-height: 38px; font-size: 0.9rem; color: var(--muted); }
 /* Bar and board form one block with one shadow; app.js sizes the board (see fitBoard). */
 .board-row {
@@ -402,11 +404,6 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .wrong-text { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
 .wrong-text dt { font-weight: 600; color: var(--muted); font-size: 0.85em; padding-top: 0.15em; }
 .wrong-text dd { margin: 0; }
-.wrong-more { margin-top: 10px; }
-.wrong-more > summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
-.wrong-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.wrong-chart .pt { cursor: pointer; }
-.wrong-chart .pt:hover { stroke: var(--text); stroke-width: 2; }
 /* Play it out vs engine */
 .spar-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .spar-opts label { display: grid; gap: 2px; color: var(--muted); font-size: 0.78rem; min-width: 0; }

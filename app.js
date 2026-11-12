@@ -70,6 +70,7 @@ const LABELS = [[10, 'Best'], [30, 'Good'], [75, 'Inaccuracy'], [150, 'Mistake']
 const labelFor = (cp) => (LABELS.find(([lim]) => cp <= lim) || [0, 'Blunder'])[1];
 const STRATEGY_OK = 30; // Best or Good counts as solved
 const SOLUTION_PLIES = 10; // how much of the engine line Solution plays out
+const REPLAY_MS = 400;     // pause between moves when Solution or Punishment plays a line
 
 const $ = (id) => document.getElementById(id);
 
@@ -769,9 +770,9 @@ function timeLine() {
   return parts.join(' ');
 }
 
-// ---------- "What went wrong": punishment line + shallow-eval trace ----------
+// ---------- "What went wrong": cost, when a quick search sees it, what got worse ----------
 // Kind is decided by material (does the punishment actually win material vs the best line?);
-// the eval trace only says when a quick look starts to see the damage.
+// the shallow-eval trace only says when a quick look starts to see the damage.
 const pawns = (k) => `${k} pawn${k > 1 ? 's' : ''}`;
 const moves = (k) => `${k} move${k > 1 ? 's' : ''}`;
 const PIECE_NAME = { N: 'knight', B: 'bishop', R: 'rook', Q: 'queen' };
@@ -834,67 +835,7 @@ function showWrong() {
     dl.lastChild.title = `Stockfish's classical eval, your moves ${c.turns.join(', ')}: `
       + c.terms.slice(0, 3).map(([k, v]) => `${TERM_NAMES[k] || k} −${v.toFixed(2)}`).join(', ');
   }
-  drawTrace();
-  $('wrong-note').textContent = `Quick-search eval after each of your next moves. Red: after your move. Green: after the best move. Ring: where a quick search first notices. Click a dot to see that position. Quick searches are noisy mid-exchange, so spikes can mislead.`;
   box.hidden = false;
-}
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-function svgEl(tag, attrs) {
-  const el = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
-}
-function drawTrace() {
-  const T = puzzle.trace;
-  const host = $('wrong-chart');
-  host.textContent = '';
-  const W = 260, H = 130, L = 30, R = 6, TOP = 8, B = 18;
-  const n = Math.max(T.punish.length, T.best.length);
-  const clamp = (v) => Math.max(-600, Math.min(600, v));
-  const all = [...T.punish, ...T.best].map(clamp);
-  let lo = Math.min(...all), hi = Math.max(...all);
-  if (hi - lo < 100) { hi += 50; lo -= 50; }
-  const x = (t) => L + (n <= 1 ? 0 : (t * (W - L - R)) / (n - 1));
-  const y = (v) => TOP + ((hi - clamp(v)) * (H - TOP - B)) / (hi - lo);
-  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Eval at each of your turns' });
-  const css = getComputedStyle(document.documentElement);
-  const red = css.getPropertyValue('--bad').trim() || '#b9473d';
-  const green = css.getPropertyValue('--accent').trim() || '#3f7d58';
-  const muted = css.getPropertyValue('--muted').trim() || '#7a6f66';
-  // zero line and labels
-  if (lo < 0 && hi > 0) svg.append(svgEl('line', { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: muted, 'stroke-width': 0.5 }));
-  for (const v of [hi, lo]) {
-    const t = svgEl('text', { x: L - 4, y: y(v) + 3, 'text-anchor': 'end', 'font-size': 8, fill: muted });
-    t.textContent = fmtEval(v);
-    svg.append(t);
-  }
-  for (let t = 0; t < n; t++) {
-    const lab = svgEl('text', { x: x(t), y: H - 4, 'text-anchor': 'middle', 'font-size': 8, fill: muted });
-    lab.textContent = t + 1;
-    svg.append(lab);
-  }
-  const series = [
-    { vals: T.best, color: green, line: puzzle.line, name: 'best line' },
-    { vals: T.punish, color: red, line: puzzle.punish, name: 'punishment' },
-  ];
-  for (const s of series) {
-    svg.append(svgEl('polyline', { points: s.vals.map((v, t) => `${x(t)},${y(v)}`).join(' '), fill: 'none', stroke: s.color, 'stroke-width': 1.8 }));
-    s.vals.forEach((v, t) => {
-      const c = svgEl('circle', { cx: x(t), cy: y(v), r: 3.5, fill: s.color, class: 'pt' });
-      const tip = svgEl('title', {});
-      tip.textContent = `${s.name}, your move ${t + 1}: ${fmtEval(v)}`;
-      c.append(tip);
-      c.addEventListener('click', () => showLine(s.line, T.plies[t] ?? 2 * t + 1, false, s.name));
-      svg.append(c);
-    });
-  }
-  // Ring: where a quick search first notices.
-  const crit = puzzle.nature.turn;
-  if (crit != null && puzzle.nature.kind !== 'marginal') {
-    svg.append(svgEl('circle', { cx: x(crit), cy: y(T.punish[crit]), r: 7, fill: 'none', stroke: red, 'stroke-width': 1.5 }));
-  }
-  host.append(svg);
 }
 
 // Show a line on the board (view only): up to and including index `upto`.
@@ -925,7 +866,7 @@ function showLine(line, upto, animate, name) {
       push(line[k++]);
       mark();
       render();
-      setTimeout(step, 700);
+      setTimeout(step, REPLAY_MS);
     } else {
       busy = false;
       setStatus(`Shown: the ${name}.`);
@@ -1165,8 +1106,16 @@ function hint() {
   render();
 }
 
+// A finished strategy problem has nothing left to reveal: Solution then replays the best line,
+// as long as the punishment line, so the two can be compared.
+const replayable = () => isStrategy() && !!state.results[state.index];
 function showSolution() {
-  if (busy || solved() || shownSolution || spar) return;
+  if (busy || spar) return;
+  if (replayable() && (solved() || shownSolution)) {
+    showLine(puzzle.line, (puzzle.punish || []).length - 1, true, 'best line');
+    return;
+  }
+  if (solved() || shownSolution) return;
   const i = state.index;
   if (!state.results[i]) {
     state.results[i] = 'revealed';
@@ -1182,7 +1131,7 @@ function showSolution() {
       const mv = line[k++];
       game.move({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] });
       render();
-      setTimeout(step, 600);
+      setTimeout(step, REPLAY_MS);
     } else {
       busy = false;
       verdict = evaluate(game.history({ verbose: true }));
@@ -1289,7 +1238,10 @@ function render() {
   $('prev').disabled = state.index === 0;
   $('next').disabled = state.index === state.ids.length - 1;
   $('hint').disabled = locked || !!spar;
-  $('solution').disabled = locked || !!spar;
+  $('solution').disabled = replayable() ? busy || !!spar : locked || !!spar;
+  // Punishment: only once the problem is finished, since it hints at why the game move fails.
+  $('punish').hidden = !isStrategy() || !puzzle?.punish;
+  $('punish').disabled = !replayable() || busy || !!spar;
   $('undo').disabled = spar ? plies() <= spar.start : locked || !plies();
   $('clear').disabled = locked || !!spar || !plies();
   $('submit').disabled = locked || !!spar || !plies();
@@ -1683,8 +1635,7 @@ $('clear').addEventListener('click', clearLine);
 $('submit').addEventListener('click', submit);
 $('hint').addEventListener('click', hint);
 $('solution').addEventListener('click', showSolution);
-$('show-punish').addEventListener('click', () => showLine(puzzle.punish, 99, true, 'punishment of your game move'));
-$('show-best').addEventListener('click', () => showLine(puzzle.line, (puzzle.punish || []).length - 1, true, 'best line'));
+$('punish').addEventListener('click', () => showLine(puzzle.punish, 99, true, 'punishment of your game move'));
 const startNewSet = () => { if (busy) return; state = newSet(); saveState(); loadPuzzle(0); };
 $('copy-fen').addEventListener('click', async () => {
   const b = $('copy-fen');

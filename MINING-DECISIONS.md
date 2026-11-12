@@ -385,7 +385,9 @@ move with one SF14 MultiPV search (52 lines, depth 16):
 ### 9.1 Punishment line
 
 My game move followed by Stockfish's line from the mining cache (mining depth), 12 plies.
-"Show punishment" and "Show best line" play them on the board.
+Once the problem is finished, the Hint/Solution row gets a third button, "Punishment", that
+plays it on the board, and Solution replays the best line for the same length (the
+"What went wrong" section had its own two buttons until 2026-11-11).
 
 ### 9.2 Quick-look eval trace
 
@@ -395,6 +397,11 @@ My game move followed by Stockfish's line from the mining cache (mining depth), 
   (a single depth-3 score was off by 900cp in one position), taken only at my turns. With
   the opponent to move, a quick search sees threats against me I can still parry, which
   caused 500-900cp swings. Single spikes remain.
+- The trace is not drawn (eval chart removed 2026-11-11). Both lines are the engine's own
+  best play, so the real gap is the loss throughout; only the quick search's delay in seeing
+  it varies, and that is mostly noise. On the 538 non-marginal Review problems the gap was
+  already a median 72% of the loss at my first turn (90% at the end), and it swung a median
+  133cp along a line, more than the loss itself in 203. The trace still feeds "Shows up".
 - "Shows up" row (was "To spot: Easy/Hard", changed 2026-11-11): the first of my turns where
   the gap between the two traces reaches `max(30, min(half the loss, 200))` cp
   (`--critical-share`, `--critical-cap`). It says when a quick *engine* search sees the

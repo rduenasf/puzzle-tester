@@ -138,6 +138,7 @@
         <div class="row2 help">
           <button id="hint" type="button" class="ghost">Hint</button>
           <button id="solution" type="button" class="ghost">Solution</button>
+          <button id="punish" type="button" class="ghost" title="Your game move and the engine's answer to it" hidden>Punishment</button>
         </div>
         <details id="spar" class="why spar">
           <summary>Play it out vs engine</summary>
@@ -184,15 +185,6 @@
         <details id="wrong" class="why" open hidden>
           <summary>What went wrong</summary>
           <dl id="wrong-text" class="wrong-text"></dl>
-          <div class="row2">
-            <button id="show-punish" type="button">Show punishment</button>
-            <button id="show-best" type="button">Show best line</button>
-          </div>
-          <details class="wrong-more">
-            <summary>Eval chart</summary>
-            <div id="wrong-chart" class="wrong-chart"></div>
-            <p id="wrong-note" class="why-note"></p>
-          </details>
         </details>
         <details id="fb" class="why fb" open hidden>
           <summary>Rate this problem <span id="fb-saved" class="count"></span></summary>
