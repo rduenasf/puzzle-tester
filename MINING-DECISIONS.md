@@ -65,8 +65,10 @@ verified** in the maia3 source).
 - Bullet 1+1 (`TimeControl` 60+1) is not mined (`--exclude-tc`, default `60+1`, 2026-11-11):
   too fast to learn strategy from. Skipped at the header scan, so these games also don't count
   towards a position's "reached in N games". The v8 export had 3 such problems; they were
-  removed from `strategic_review.js` by hand (none had a repeat label), and the next full mine
-  leaves them out on its own.
+  removed from `strategic_review.js` by hand (none had a repeat label). The v8 CSV was mined
+  before the filter, so re-exporting it brought them back; since 2026-11-12 `export_site.py`
+  applies the same `--exclude-tc` (default `60+1`) to the CSV rows, so an old CSV can't
+  reintroduce them.
 
 ## 5. The mining pipeline (current defaults)
 
@@ -356,7 +358,7 @@ move with one SF14 MultiPV search (52 lines, depth 16):
   ones; median difference 8cp (16) / 7cp (20). Moves on the other side of 30cp: 46 / 41,
   the size of single-search noise itself (#753 b5 alone: 59 at depth 16, 10 at depth 20).
 
-### 8.2 Depths: mining 20, export 16; the export keeps the mined best (2026-11-11)
+### 8.2 Depths: mining 20, export 20 (was 16); the export keeps the mined best (2026-11-11)
 
 - Mining decides (cp loss, best move, line, eval) with one single-line search per position,
   now at depth 20. Measured on 36 recent games (2,116 positions, 12 x 1 thread): SF14 depth 16
@@ -365,8 +367,10 @@ move with one SF14 MultiPV search (52 lines, depth 16):
 - Single-thread engines: SF19 depth 16 on the same positions, engines x threads: 12 x 1
   32.8 pos/s, 6 x 2 12.1, 3 x 4 5.7, 1 x 12 1.5. Lazy SMP threads search the same tree, so at
   a fixed depth they add work instead of dividing it; positions are independent.
-- The export's all-moves table (depth 16, ~25 min for 1,011 problems; depth 20 would be
-  ~1.5-2 h) only grades the alternatives. `line`, `eval` and `minedBest` come from the mining
+- The export's all-moves table only grades the alternatives. It was depth 16 (~25 min for
+  1,011 problems) for speed only; with the export cache only new positions are
+  searched, so from 2026-11-11 it is depth 20 like mining (fewer near-best moves misgraded,
+  10/40 vs 5/40 in §8.1, and less noise at the 30cp line), with a 1200s limit per search. `line`, `eval` and `minedBest` come from the mining
   CSV, so line[0] == minedBest always. Losses are measured from the table's own value for the
   mined best (one scale; depth-20 and depth-16 evals differ, e.g. #753 Qf7 -20 vs -7); moves
   the table rates above it count as 0. The game move is graded with the table's number;
@@ -494,7 +498,7 @@ last of my turns, so the loss doesn't hold for 2 turns.
 
 - Modes: Mate (original), Strategy (the first 41 problems), Review (current 861, browsable).
 - Strategy and Review problems are one move. Every legal move is pre-scored by Stockfish at
-  depth 16 (`export_depth`), losses measured from the mined best move (§8.2), so grading needs no
+  depth 20 (`export_depth`; 16 before 2026-11-11), losses measured from the mined best move (§8.2), so grading needs no
   engine in the browser: Best <= 10cp, Good <= 30cp count
   as solved; Inaccuracy <= 75, Mistake <= 150, Blunder above.
 - Review has three sections: Puzzles (not marginal) and Nuanced (marginal) (§9.3), and
@@ -563,14 +567,14 @@ cp work/review.js ../strategic_review.js
 `export_site.py` caches each problem's raw per-move scores in
 `work/export_cache-<engine>.json`, keyed by full FEN + depth like the mining cache (raw
 scores, not losses, since losses depend on the mined best move), so a re-export only searches
-new positions. Each search stops after `--time-limit` (600s); one that hits it keeps the depth
+new positions. Each search stops after `--time-limit` (1200s); one that hits it keeps the depth
 it reached, is reported, and is cached (`--rescore-timeouts` retries those; `--no-cache` skips
 the cache). Both `mine` and `export_site.py` print progress with an ETA; to watch a background
 run, tail its log (`Get-Content work8_export.log -Wait`).
 
 `mine` writes `*_config.json` with the thresholds used. Mining at depth 20 takes ~4.5 h of
 Stockfish for ~730 games (keep the PC awake). `export_site.py` scores every legal move at
-depth 16 (~25 min for 1,011 problems); `explain.py` and `whatchanged.py` take a few minutes each.
+depth 20 (a full run ~2 h; later runs only search new positions); `explain.py` and `whatchanged.py` take a few minutes each.
 v7 (2026-11-11) is the first run with SF19 at depth 20; v6 and earlier were SF14 at depth 16.
 After changing site files, bump `VERSION` in `sw.js`.
 

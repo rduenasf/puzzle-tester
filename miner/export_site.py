@@ -162,10 +162,14 @@ def main():
                     help="Source PGN file(s) for the game clocks, comma-separated")
     ap.add_argument("--feedback", default=None,
                     help="Trainer feedback export(s), comma-separated: problems rated bad are left out")
-    ap.add_argument("--depth", type=int, default=16)
+    ap.add_argument("--exclude-tc", default="60+1",
+                    help="Comma list of TimeControl headers to leave out ('' = none); same "
+                         "default as mining's --exclude-tc")
+    ap.add_argument("--depth", type=int, default=20,
+                    help="Depth of the all-moves table (same as mining)")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--stockfish", default=default_stockfish())
-    ap.add_argument("--time-limit", type=float, default=600,
+    ap.add_argument("--time-limit", type=float, default=1200,
                     help="Seconds per problem; a search still running then stops at the depth it reached")
     ap.add_argument("--no-cache", action="store_true",
                     help="Ignore and don't write work/export_cache-<engine>.json")
@@ -183,6 +187,13 @@ def main():
         before = len(rows)
         rows = [r for r in rows if f"{r['game']}#{r['fen']}" not in bad]
         print(f"feedback: left out {before - len(rows)} problems rated bad ({len(bad)} bad ratings)")
+    # Same rule as mining (--exclude-tc): a CSV mined before that filter, or with it off,
+    # must not bring those games back into the site.
+    excluded = {t.strip() for t in (a.exclude_tc or "").split(",") if t.strip()}
+    before = len(rows)
+    rows = [r for r in rows if r.get("time_control", "") not in excluded]
+    if before - len(rows):
+        print(f"exclude-tc: left out {before - len(rows)} problems from {', '.join(sorted(excluded))} games")
     raws = score_rows(a, rows)
     results = [losses(raw, chess.Board(r["fen"]).parse_san(r["best_move"]).uci())
                for r, raw in zip(rows, raws)]
