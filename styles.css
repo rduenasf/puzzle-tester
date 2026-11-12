@@ -82,6 +82,15 @@ body {
     }
     .app.browsing .browser-list { flex: 1 1 auto; min-height: 120px; max-height: none; }
   }
+  /* Closed: the panel folds to a full-height strip on the left and the board takes the room. */
+  .app.browsing:has(> .browser:not([open])) { grid-template-columns: auto minmax(0, 1fr); }
+  .app.browsing > .browser:not([open]) {
+    padding: 12px 8px;
+    height: calc(100vh - 28px); height: calc(100dvh - 28px);
+  }
+  .app.browsing > .browser:not([open]) > summary { writing-mode: sideways-lr; height: 100%; justify-content: flex-end; }
+  .app.browsing > .browser[open] > summary::before { transform: translateX(2px) rotate(135deg); } /* left: hide */
+  .app.browsing > .browser:not([open]) > summary::before { transform: translateX(-2px) rotate(-45deg); } /* right: show */
   .app.browsing .browser-list .meta { white-space: normal; }
   .app.browsing .filters label { flex: 1 1 140px; }
   .app.browsing .filters select { width: 100%; }
@@ -346,6 +355,16 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   padding: 8px 12px; font-size: 0.88rem;
 }
 .browser summary { cursor: pointer; font-weight: 550; }
+/* Chevron points the way the panel goes: up to hide it on phones, left on wide screens. */
+.browser > summary { list-style: none; display: flex; align-items: center; gap: 8px; }
+.browser > summary::-webkit-details-marker { display: none; }
+.browser > summary::before {
+  content: ''; flex: none; width: 7px; height: 7px; margin: 0 2px;
+  border: solid currentColor; border-width: 0 2px 2px 0;
+  transform: translateY(2px) rotate(-135deg); /* up: hide */
+  transition: transform 0.15s;
+}
+.browser:not([open]) > summary::before { transform: translateY(-2px) rotate(45deg); } /* down: show */
 .filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin: 8px 0; }
 .filters label { display: grid; gap: 2px; color: var(--muted); font-size: 0.78rem; }
 .filters select, .filters input {
@@ -390,10 +409,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   padding: 8px 12px; font-size: 0.88rem;
 }
 .why summary { cursor: pointer; font-weight: 550; }
-.why ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
-.why li { display: grid; grid-template-columns: 1.2em 1fr; gap: 6px; }
-.why li .ok { color: var(--accent); }
-.why li .na { color: var(--muted); }
+.why ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
 .why li small { color: var(--muted); }
 .maia-table { margin-top: 8px; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .maia-table th, .maia-table td { padding: 3px 4px; white-space: nowrap; text-align: right; border-bottom: 1px solid var(--line); }

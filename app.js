@@ -875,7 +875,7 @@ function setDetail(text) {
   el.hidden = !text;
 }
 
-// "Why this problem": every mining check with its value and threshold.
+// "Puzzle context": every mining check with its value and threshold.
 const KIND_TEXT = {
   single: 'Normal: the best move is findable at your level (Maia p between the limits).',
   typical: "Wrong instinct: your move was Maia's #1 prediction at your rating, so the minimum p(best) is waived.",
@@ -892,41 +892,22 @@ function showWhy(finished) {
   if (!isStrategy() || !C || !K) { box.hidden = true; return; }
   const list = $('why-list');
   list.textContent = '';
-  const add = (state, label, value) => {
+  const add = (label, value) => {
     const li = document.createElement('li');
-    const mark = document.createElement('span');
-    mark.className = state === 'na' ? 'na' : 'ok';
-    mark.textContent = state === 'na' ? '–' : '✓';
-    const text = document.createElement('span');
-    text.append(label + ' ');
+    li.append(label + ' ');
     const sm = document.createElement('small');
     sm.textContent = value;
-    text.append(sm);
-    li.append(mark, text);
+    li.append(sm);
     list.append(li);
   };
-  const plies = C.forcing_plies;
-  add('ok', 'Category:', KIND_TEXT[puzzle.kind] || puzzle.kind);
+  add('Category:', KIND_TEXT[puzzle.kind] || puzzle.kind);
   // Drift has its own floor (the worst move of a slow slide), so cp_min doesn't apply to it.
-  add('ok', `cp loss ${K.cpLoss}`, puzzle.kind === 'drift' && C.drift_cp_min != null
+  add(`cp loss ${K.cpLoss}`, puzzle.kind === 'drift' && C.drift_cp_min != null
     ? `(drift: at least ${C.drift_cp_min}; ${C.drift_window} moves in a row lost ${C.drift_total}+ in total, none more than ${C.drift_max_single})`
     : C.blunder && C.blunder_max > C.cp_max
     ? `(allowed ${C.cp_min}–${C.cp_max}; blunder up to ${C.blunder_max})`
     : `(allowed ${C.cp_min}–${C.cp_max})`);
-  add('ok', `Position was balanced: eval ${fmtEval(K.evalBefore)} for you`, `(limit ±${(C.max_eval / 100).toFixed(2)})`);
-  add('ok', `Best line is quiet: ${K.forcing} checks/captures in its first ${plies} plies`, `(max ${C.max_forcing})`);
-  if (K.cpLoss > C.quiet_above) {
-    add('ok', `Not just dropped material: down ${Math.max(0, K.materialLost)} pawn(s) after ${plies} plies of the punishment`, `(max ${C.max_material_lost}; applies above ${C.quiet_above}cp)`);
-  } else {
-    add('na', 'Material rule not needed', `(only for losses above ${C.quiet_above}cp)`);
-  }
-  const lo = 100 * C.p_best_min, hi = 100 * C.p_best_max;
-  const why = puzzle.pBest > hi ? 'above the range: miss'
-    : puzzle.pBest < lo ? 'below the range: allowed because your move was Maia\'s #1'
-    : 'in range';
-  // The values themselves are in the "Maia probabilities" table.
-  add('ok', `Maia p(best) at your Elo is ${why}`, `(range ${lo}–${hi}%)`);
-  add('ok', `Maia p(best) at +${C.elo_delta} Elo is high enough`, `(min ${100 * C.p_best_strong_min}%)`);
+  add(`Position was balanced: eval ${fmtEval(K.evalBefore)} for you`, `(limit ±${(C.max_eval / 100).toFixed(2)})`);
   if (puzzle.flags) {
     const pts = (x) => Math.round(100 * x);
     const gap = (x) => (x == null ? '?' : `${x >= puzzle.pBest ? '+' : '−'}${Math.abs(x - puzzle.pBest).toFixed(1)}`);
@@ -934,20 +915,12 @@ function showWhy(finished) {
     const t = trendOf(puzzle);
     const rule = t === 'engine_move' ? `(flag: −${pts(C.engine_drop_top)} at ${top} or −${pts(C.engine_drop_plus)} at +${C.elo_delta})`
       : `(rating-sensitive needs +${pts(C.sensitive_plus)} at +${C.elo_delta} and +${pts(C.sensitive_top)} at ${top})`;
-    add('na', `Rating trend: ${TREND_LABEL[t]}, p(best) ${gap(puzzle.pBestPlus)} points at +${C.elo_delta}, ${gap(puzzle.pBestTop)} at ${top}`, rule);
+    add(`Rating trend: ${TREND_LABEL[t]}, p(best) ${gap(puzzle.pBestPlus)} points at +${C.elo_delta}, ${gap(puzzle.pBestTop)} at ${top}`, rule);
   }
   if (puzzle.seen) {
-    add('na', `${seenText(puzzle)}${puzzle.repeat ? `: ${REPEAT_LABEL[puzzle.repeat]}` : ''}`,
+    add(`${seenText(puzzle)}${puzzle.repeat ? `: ${REPEAT_LABEL[puzzle.repeat]}` : ''}`,
       `(label needs a problem in 2+ games; opening = first ${C.opening_plies || 16} plies)`);
   }
-  const off = [];
-  if (!C.natural) off.push('p(your move) ≥ p(best)');
-  if (C.p_gain_min == null) off.push(`p(best) rises at +${C.elo_delta}`);
-  const differs = finished && puzzle.minedBest && puzzle.minedBest !== puzzle.line[0]
-    ? ` The mining run's best move was ${sanOf(puzzle.fen, puzzle.minedBest)}; grading uses a fresh depth-${C.depth} score, which picked ${sanOf(puzzle.fen, puzzle.line[0])}.`
-    : '';
-  $('why-note').textContent = `Values from the mining run (Stockfish depth ${C.depth}, Maia ${C.maia_model}).`
-    + (off.length ? ` Turned off: ${off.join('; ')}.` : '') + differs;
   box.hidden = false;
 }
 
