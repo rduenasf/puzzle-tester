@@ -35,11 +35,12 @@
           <span class="nav-label">Strategy Puzzles</span>
         </button>
       </li>
-      <li>
+      <li class="nav-group">
         <button id="mode-review" class="nav-item" type="button" title="Review: all problems from the current miner settings, with the checks each one passed">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 11h7M4 16h5"/><circle cx="16" cy="15" r="4"/><path d="M19 18l3 3"/></svg>
           <span class="nav-label">Review</span>
         </button>
+        <div id="review-sections" class="nav-sub" role="group" aria-label="Review section"></div>
       </li>
     </ul>
     <button id="nav-collapse" class="nav-item nav-collapse" type="button" aria-expanded="true" title="Collapse menu">
@@ -68,7 +69,6 @@
       <summary id="browser-summary">Problems</summary>
       <div class="filters">
         <label>Category <select id="f-cat"></select></label>
-        <label>Verdict <select id="f-nature"></select></label>
         <label>Rating trend <select id="f-trend"></select></label>
         <label>Repeated <select id="f-repeat"></select></label>
         <label>Phase <select id="f-phase"></select></label>

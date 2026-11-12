@@ -424,9 +424,9 @@ My game move followed by Stockfish's line from the mining cache (mining depth), 
 - Marginal 30 -> 75 (2026-11-11): 30cp is about the size of engine noise (§6.5), and a
   31-75cp loss is what the trainer itself grades an Inaccuracy, not a strategic mistake.
   On the 1,175-problem export: 152 marginal -> 637 (485 more: 432 from positional, 32
-  positional then material, 21 concrete); 538 remain. Review hides marginal problems by
-  default rather than dropping them, since some close ones may still be instructive (verdict
-  filter "all verdicts" shows them). The critical-ply floor stays 30 (`--critical-min`,
+  positional then material, 21 concrete); 538 remain. Review keeps marginal problems rather
+  than dropping them, since some close ones may still be instructive: they are its Nuanced
+  section, apart from Puzzles (§10). The critical-ply floor stays 30 (`--critical-min`,
   formerly tied to `--marginal`); traces and critical plies were unchanged by the split.
 
 ### 9.4 "What changed" from the classical eval
@@ -485,10 +485,15 @@ last of my turns, so the loss doesn't hold for 2 turns.
   depth 16 (`export_depth`), losses measured from the mined best move (§8.2), so grading needs no
   engine in the browser: Best <= 10cp, Good <= 30cp count
   as solved; Inaccuracy <= 75, Mistake <= 150, Blunder above.
-- Review: numbered list (#1-#861 in export order; **a re-export renumbers**), filters by
-  category, verdict (default "all but marginal", §9.3; Go to # or a name that is only
-  marginal switches it to "all verdicts"), what changed, time format and status, and Go to #. On screens >= 1200px
-  the list is a sticky left column.
+- Review has two sections (§9.3): Puzzles (not marginal) and Nuanced (marginal), each with
+  its own filters and open problem; progress is shared, per problem id. Numbered list (#N is
+  the position in the whole export, so numbers skip within a section; **a re-export
+  renumbers**), filters by category, rating trend, repeats, phase, what changed, time format,
+  status, feedback and favorites, and Go to # or a name (one only in the other section
+  switches to it). On screens >= 1200px the list is a sticky left column.
+- Rejected: a verdict filter. Apart from hiding marginal problems it mostly split off the
+  positional majority (353 of 538), and picking "concrete" tells you the answer is concrete
+  before you look. The verdict stays on each problem and in `feedback.py`.
 - "Why this problem" (always visible) lists each check's value and threshold from the
   mining run; move names stay hidden until solved or revealed. "What went wrong" appears
   after solving or revealing.

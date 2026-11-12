@@ -33,7 +33,21 @@ const isOrdered = () => mode === 'mate' && !!SECTIONS[section].ordered;
 let section = (() => {
   try { const s = localStorage.getItem(SECTION_KEY); return SECTIONS[s] ? s : 'classic'; } catch { return 'classic'; }
 })();
-const pool = () => (mode === 'mate' ? SECTIONS[section].pool : MODES[mode].pool);
+// Review is split in two by the verdict (MINING-DECISIONS.md §9.3): Puzzles, and Nuanced for
+// marginal problems (re-score loss <= 75cp). Both share one store: progress is per problem id,
+// filters and the open problem are per section.
+const isMarginal = (p) => p.nature?.kind === 'marginal';
+const REVIEW_SECTION_KEY = 'review-section';
+const REVIEW_SECTIONS = {
+  puzzles: { pool: review.STRATEGIC_REVIEW.filter((p) => !isMarginal(p)), label: 'Puzzles', about: 'The played move loses more than 75cp' },
+  nuanced: { pool: review.STRATEGIC_REVIEW.filter(isMarginal), label: 'Nuanced', about: 'Marginal: the played move loses 75cp or less on re-score' },
+};
+let rsection = (() => {
+  try { const s = localStorage.getItem(REVIEW_SECTION_KEY); return REVIEW_SECTIONS[s] ? s : 'puzzles'; } catch { return 'puzzles'; }
+})();
+const sectionOf = (p) => (isMarginal(p) ? 'nuanced' : 'puzzles');
+const pool = () => (mode === 'mate' ? SECTIONS[section].pool
+  : mode === 'review' ? REVIEW_SECTIONS[rsection].pool : MODES[mode].pool);
 const setKey = () => (mode === 'mate' ? SECTIONS[section].key : MODES[mode].key);
 const isStrategy = () => mode !== 'mate'; // strategy and review share the one-move flow
 
@@ -131,7 +145,8 @@ function saveState() {
   if (isBrowse()) {
     state.ids.forEach((id, i) => { if (state.results[i]) store.done[id] = state.results[i]; });
     store.current = state.ids[state.index];
-    try { localStorage.setItem(MODES[mode].key, JSON.stringify(store)); } catch {}
+    storeSections[rsection] = { filters: store.filters, current: store.current };
+    try { localStorage.setItem(MODES[mode].key, JSON.stringify({ done: store.done, sections: storeSections })); } catch {}
     refreshStatusCounts();
     return;
   }
@@ -172,15 +187,6 @@ const NATURE_LABEL = { positional: 'positional', positional_then_material: 'posi
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
   cat: { label: 'all categories', of: (p) => p.kind, name: (v) => KIND_LABEL[v] || v },
-  // Default ('') hides marginal problems (re-score loss <= 75cp, MINING-DECISIONS.md §9.3);
-  // 'all' brings them back. `always`: applies even when left at its default.
-  nature: {
-    label: 'all but marginal',
-    always: true,
-    of: (p) => p.nature && p.nature.kind,
-    match: (p, v) => (v === 'all' || (v ? FILTERS.nature.of(p) === v : FILTERS.nature.of(p) !== 'marginal')),
-    name: (v) => NATURE_LABEL[v] || v,
-  },
   trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
   repeat: { label: 'any', of: repeatOf, name: (v) => REPEAT_LABEL[v] || v },
   phase: { label: 'any', of: phaseOf, name: (v) => (v === 'endgame' ? 'endgame' : 'opening/middlegame') },
@@ -352,10 +358,19 @@ $('fb-file').addEventListener('change', async (e) => {
   }
 });
 let store = { done: {}, filters: {}, current: null };
+let storeSections = {}; // Review section → { filters, current }
 function loadStore() {
+  store = { done: {}, filters: {}, current: null };
+  storeSections = {};
   try {
     const s = JSON.parse(localStorage.getItem(MODES[mode].key));
-    if (s && s.done) store = { done: s.done, filters: s.filters || {}, current: s.current || null };
+    if (!s || !s.done) return;
+    // Before the split: one set of filters and one open problem, for what is now Puzzles.
+    storeSections = s.sections || { puzzles: { filters: s.filters || {}, current: s.current || null } };
+    const mine = storeSections[rsection] || {};
+    const filters = { ...(mine.filters || {}) };
+    delete filters.nature; // the verdict filter is gone: the sections replace it
+    store = { done: s.done, filters, current: mine.current || null };
   } catch {}
 }
 // The name box: "Hazel", "hazel skimmer" or "#v51j" → "hazel", "hazel-skimmer", "v51j", matched
@@ -366,17 +381,12 @@ const queryOf = (s) => {
 };
 const matchesQuery = (p, q) => (p.name || '').includes(q) || p.id.includes(q);
 const matchOne = (p, k, v) => (k === 'q' ? !v || matchesQuery(p, v)
-  : !FILTERS[k] || (!v && !FILTERS[k].always)
-    || (FILTERS[k].match ? FILTERS[k].match(p, v || '') : FILTERS[k].of(p) === v));
-const ALWAYS = Object.keys(FILTERS).filter((k) => FILTERS[k].always);
+  : !FILTERS[k] || !v || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v));
 function filtered() {
-  const keys = new Set([...Object.keys(store.filters), ...ALWAYS]);
-  return pool().filter((p) => [...keys].every((k) => matchOne(p, k, store.filters[k] || '')));
+  return pool().filter((p) => Object.entries(store.filters).every(([k, v]) => matchOne(p, k, v)));
 }
 // Set filters as [key, value], and how each reads on screen: "Phase: endgame", "Name: hazel".
 const activeFilters = () => Object.entries(store.filters).filter(([k, v]) => v && (k === 'q' || FILTERS[k]));
-// Filters left at a default that still hides problems (the verdict filter's "all but marginal").
-const defaultHiding = () => ALWAYS.filter((k) => !store.filters[k]).map((k) => [k, '']);
 function filterText(k, v) {
   if (k === 'q') return `Name or id: "${v.replace(/-/g, ' ')}"`;
   const sel = $(`f-${k}`);
@@ -388,7 +398,7 @@ function noMatchNote(changed) {
   const v = store.filters[changed];
   const mine = changed && v ? pool().filter((p) => matchOne(p, changed, v)) : [];
   // Only the other filters that turn away at least one of those problems.
-  const hiding = [...activeFilters(), ...defaultHiding()]
+  const hiding = activeFilters()
     .filter(([k, x]) => k !== changed && mine.some((p) => !matchOne(p, k, x)));
   if (!mine.length || !hiding.length) return 'No problems match these filters.';
   const n = mine.length;
@@ -416,8 +426,7 @@ function fillFilters() {
       o.value = value; o.textContent = text;
       sel.append(o);
     };
-    add('', f.always ? `${f.label} (${pool().filter((p) => f.match(p, '')).length})` : f.label);
-    if (k === 'nature') add('all', `all verdicts (${pool().length})`);
+    add('', f.label);
     if (k === 'status') {
       const n = (v) => pool().filter((p) => FILTERS.status.match(p, v)).length;
       for (const v of ['todo', 'done', 'clean', 'helped', 'revealed']) {
@@ -455,7 +464,7 @@ function refreshCounts(k) {
   const f = FILTERS[k];
   const sel = $(`f-${k}`);
   for (const o of sel.options) {
-    if (!o.value && !f.always) continue;
+    if (!o.value) continue;
     const n = pool().filter((p) => (f.match ? f.match(p, o.value) : f.of(p) === o.value)).length;
     o.textContent = o.textContent.replace(/\(\d+\)$/, `(${n})`);
   }
@@ -485,10 +494,8 @@ function buildList() {
   });
   const total = pool().length;
   const on = activeFilters().length;
-  const hid = store.filters.nature ? 0 : pool().filter((p) => !matchOne(p, 'nature', '')).length;
-  const hidText = hid ? ` · ${hid} marginal hidden` : '';
-  $('browser-summary').textContent = !on ? `Problems (${state.ids.length}${hidText})`
-    : `Problems (${state.ids.length} of ${total} match · ${on} filter${on === 1 ? '' : 's'} on${hidText})`;
+  $('browser-summary').textContent = !on ? `Problems (${state.ids.length})`
+    : `Problems (${state.ids.length} of ${total} match · ${on} filter${on === 1 ? '' : 's'} on)`;
   $('browser-note').hidden = true;
   markActive();
 }
@@ -533,11 +540,13 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
   clearTimeout(queryTimer);
   const raw = $('f-num').value.trim().replace(/^#/, '');
   if (/^\d+$/.test(raw)) {
-    const p = pool()[+raw - 1];
-    if (!p) { setStatus(`There is no problem #${raw} (1–${pool().length}).`, 'bad'); return; }
+    // A number is the position in the whole export, in either section.
+    const all = MODES.review.pool, p = all[+raw - 1];
+    if (!p) { setStatus(`There is no problem #${raw} (1–${all.length}).`, 'bad'); return; }
+    if (sectionOf(p) !== rsection) setReviewSection(sectionOf(p));
     if (!state.ids.includes(p.id)) {  // outside the current filters: clear them
       for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
-      if (!matchOne(p, 'nature', '')) $('f-nature').value = 'all';  // a marginal one: show marginal
+      $('f-num').value = raw;
       store.current = p.id;
       applyFilters();
     }
@@ -545,10 +554,11 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
   } else {
     applyFilters();
     const q = queryOf(raw);
-    // Only marginal problems have that name: show marginal rather than say there is none.
-    if (q && !filtered().length && !$('f-nature').value
-        && pool().some((p) => matchesQuery(p, q) && !matchOne(p, 'nature', ''))) {
-      $('f-nature').value = 'all';
+    // Only the other section has that name: go there rather than say there is none.
+    const other = rsection === 'puzzles' ? 'nuanced' : 'puzzles';
+    if (q && !filtered().length && REVIEW_SECTIONS[other].pool.some((p) => matchesQuery(p, q))) {
+      setReviewSection(other);
+      $('f-num').value = raw;
       applyFilters();
     }
     if (q && !filtered().length) { setStatus(`No problem has "${raw}" in its name or id.`, 'bad'); return; }
@@ -1715,6 +1725,30 @@ for (const [k, sec] of Object.entries(SECTIONS)) {
     setMode('mate');
   });
   $('sections').appendChild(b);
+}
+
+// Section buttons (Review only): Puzzles and Nuanced.
+function setReviewSection(k) {
+  if (mode === 'review') saveState(); // keep this section's filters and open problem
+  rsection = k;
+  try { localStorage.setItem(REVIEW_SECTION_KEY, k); } catch {}
+  for (const j of Object.keys(REVIEW_SECTIONS)) $(`rsection-${j}`).setAttribute('aria-pressed', String(j === k));
+  setMode('review');
+}
+for (const [k, sec] of Object.entries(REVIEW_SECTIONS)) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.id = `rsection-${k}`;
+  b.textContent = sec.label;
+  b.title = `${sec.about} (${sec.pool.length} problems)`;
+  b.disabled = !sec.pool.length;
+  b.setAttribute('aria-pressed', String(k === rsection));
+  b.addEventListener('click', () => {
+    closeNav();
+    if (busy || (k === rsection && mode === 'review')) return;
+    setReviewSection(k);
+  });
+  $('review-sections').appendChild(b);
 }
 
 // Step through the line: buttons, clicking a move, the mouse wheel over the move list.

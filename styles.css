@@ -151,7 +151,7 @@ body { padding-left: var(--nav-w); }
 .nav-collapse svg { transition: transform 0.15s; }
 html.nav-collapsed .nav-collapse svg { transform: rotate(180deg); }
 
-/* Mate sections: indented under Mates while it is the open page. */
+/* Sections (Mates, Review): indented under their page while it is the open page. */
 .nav-group { position: relative; }
 .nav-sub { display: none; padding: 2px 0 6px 36px; }
 .nav-group:has(> [aria-current="page"]) > .nav-sub { display: grid; gap: 1px; }
@@ -162,7 +162,7 @@ html.nav-collapsed .nav-collapse svg { transform: rotate(180deg); }
 .nav-sub button:hover:not(:disabled) { background: var(--nav-hover); color: #fff; }
 .nav-sub button[aria-pressed="true"] { color: #fff; font-weight: 600; }
 
-/* Collapsed: icons only; Mates' sections open as a flyout on hover/focus. */
+/* Collapsed: icons only; sections open as a flyout on hover/focus. */
 html.nav-collapsed .sidenav .nav-label { display: none; }
 html.nav-collapsed .nav-item { justify-content: center; padding: 8px; }
 html.nav-collapsed .nav-brand { justify-content: center; padding-inline: 0; }
