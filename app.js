@@ -41,7 +41,21 @@ const REVIEW_SECTION_KEY = 'review-section';
 const REVIEW_SECTIONS = {
   puzzles: { pool: review.STRATEGIC_REVIEW.filter((p) => !isMarginal(p)), label: 'Puzzles', about: 'The played move loses more than 75cp' },
   nuanced: { pool: review.STRATEGIC_REVIEW.filter(isMarginal), label: 'Nuanced', about: 'Marginal: the played move loses 75cp or less on re-score' },
+  openings: { pool: openingMistakes(review.STRATEGIC_REVIEW), label: 'Openings', about: 'Opening positions that became a problem in more than one of your games, once each, most frequent first' },
 };
+// Openings: every repeated position (MINING-DECISIONS.md §6.10) once, marginal or not. The miner
+// keeps a problem per game; show the one where the played move lost most, so the lesson is clearest.
+function openingMistakes(all) {
+  const byPos = new Map();
+  for (const p of all) {
+    if (!p.repeat || !p.seen) continue;
+    const k = p.fen.split(' ').slice(0, 4).join(' ');
+    const cur = byPos.get(k);
+    if (!cur || (p.scores[p.played] ?? 0) > (cur.scores[cur.played] ?? 0)) byPos.set(k, p);
+  }
+  return [...byPos.values()].sort((a, b) => b.seen.puzzles - a.seen.puzzles
+    || b.seen.puzzles / b.seen.games - a.seen.puzzles / a.seen.games);
+}
 let rsection = (() => {
   try { const s = localStorage.getItem(REVIEW_SECTION_KEY); return REVIEW_SECTIONS[s] ? s : 'puzzles'; } catch { return 'puzzles'; }
 })();
@@ -188,14 +202,7 @@ const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'r
 const FILTERS = {
   cat: { label: 'all categories', of: (p) => p.kind, name: (v) => KIND_LABEL[v] || v },
   trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
-  repeat: { label: 'any', of: repeatOf, name: (v) => REPEAT_LABEL[v] || v },
   phase: { label: 'any', of: phaseOf, name: (v) => (v === 'endgame' ? 'endgame' : 'opening/middlegame') },
-  changed: {
-    label: 'any',
-    of: (p) => (!p.changed || p.nature.kind === 'marginal' ? 'n/a'
-      : p.changed.explains && p.changed.terms.length ? p.changed.terms[0][0] : 'not explained'),
-    name: (v) => (TERM_NAMES[v] || v),
-  },
   tc: {
     label: 'all time formats',
     // "bullet" or "bullet 2+1": a class matches all its time controls
@@ -371,6 +378,8 @@ function loadStore() {
     const mine = storeSections[rsection] || {};
     const filters = { ...(mine.filters || {}) };
     delete filters.nature; // the verdict filter is gone: the sections replace it
+    delete filters.changed; // so are "What changed" and "Repeated" (the Openings section replaces it)
+    delete filters.repeat;
     store = { done: s.done, filters, current: mine.current || null };
   } catch {}
 }
@@ -484,7 +493,7 @@ function buildList() {
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
       p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '',
-      p.repeat ? REPEAT_LABEL[p.repeat] : '', isEndgame(p) ? 'endgame' : '', p.nature?.trapped ? 'trapped piece' : '']
+      p.repeat ? `${REPEAT_LABEL[p.repeat]}${p.seen ? ` (${p.seen.puzzles} of ${p.seen.games} games)` : ''}` : '', isEndgame(p) ? 'endgame' : '', p.nature?.trapped ? 'trapped piece' : '']
       .filter(Boolean).join(' · ');
     const st = document.createElement('span'); st.className = 'st';
     b.append(n, meta, st);
@@ -544,7 +553,7 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
     // A number is the position in the whole export, in either section.
     const all = MODES.review.pool, p = all[+raw - 1];
     if (!p) { setStatus(`There is no problem #${raw} (1–${all.length}).`, 'bad'); return; }
-    if (sectionOf(p) !== rsection) setReviewSection(sectionOf(p));
+    if (!pool().includes(p)) setReviewSection(sectionOf(p));
     if (!state.ids.includes(p.id)) {  // outside the current filters: clear them
       for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
       $('f-num').value = raw;
@@ -556,8 +565,8 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
     applyFilters();
     const q = queryOf(raw);
     // Only the other section has that name: go there rather than say there is none.
-    const other = rsection === 'puzzles' ? 'nuanced' : 'puzzles';
-    if (q && !filtered().length && REVIEW_SECTIONS[other].pool.some((p) => matchesQuery(p, q))) {
+    const other = Object.keys(REVIEW_SECTIONS).find((k) => k !== rsection && REVIEW_SECTIONS[k].pool.some((p) => matchesQuery(p, q)));
+    if (q && !filtered().length && other) {
       setReviewSection(other);
       $('f-num').value = raw;
       applyFilters();

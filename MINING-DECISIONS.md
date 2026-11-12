@@ -485,12 +485,16 @@ last of my turns, so the loss doesn't hold for 2 turns.
   depth 16 (`export_depth`), losses measured from the mined best move (§8.2), so grading needs no
   engine in the browser: Best <= 10cp, Good <= 30cp count
   as solved; Inaccuracy <= 75, Mistake <= 150, Blunder above.
-- Review has two sections (§9.3): Puzzles (not marginal) and Nuanced (marginal), each with
-  its own filters and open problem; progress is shared, per problem id. Numbered list (#N is
-  the position in the whole export, so numbers skip within a section; **a re-export
-  renumbers**), filters by category, rating trend, repeats, phase, what changed, time format,
-  status, feedback and favorites, and Go to # or a name (one only in the other section
-  switches to it). On screens >= 1200px the list is a sticky left column.
+- Review has three sections: Puzzles (not marginal) and Nuanced (marginal) (§9.3), and
+  Openings: each repeated position (§6.10) once, marginal or not, most frequent first, as the
+  problem whose played move lost most. Each section has its own filters and open problem;
+  progress is shared, per problem id. Numbered list (#N is the position in the whole export,
+  so numbers skip within a section; **a re-export renumbers**), a name/id box on its own row,
+  filters by category, rating trend, phase, time format, status, feedback and favorites, and
+  Go to # or a name (one only in another section switches to it).
+- Rejected (2026-11-11): "What changed" and "Repeated" filters. What changed wasn't useful to
+  filter by; repeats were 13 problems, mostly marginal (so hidden in Nuanced) and duplicated
+  per game, which the Openings section shows better. On screens >= 1200px the list is a sticky left column.
 - Rejected: a verdict filter. Apart from hiding marginal problems it mostly split off the
   positional majority (353 of 538), and picking "concrete" tells you the answer is concrete
   before you look. The verdict stays on each problem and in `feedback.py`.

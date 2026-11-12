@@ -358,6 +358,9 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 }
 .filters .go { display: flex; gap: 6px; align-items: end; }
 .filters button { min-height: 34px; padding: 6px 10px; font-size: 0.85rem; }
+.filters.search-row { margin-bottom: 0; }
+.filters.search-row .go, .app.browsing .filters.search-row label { flex: 1 1 auto; }
+.filters.search-row input { width: 100%; }
 .browser-list {
   list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto;
   border-top: 1px solid var(--line);
