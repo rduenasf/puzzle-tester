@@ -646,12 +646,13 @@ function wrongRows() {
     positional_then_material: `Nothing at first, but from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
     concrete: `Material, quickly: from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
   }[n.kind] || n.kind;
-  const spot = n.turn == null
-    ? `Hard: a quick engine search (depth 1–${T.depth}) never notices it in this line.`
+  // When a quick engine search (not a human) starts to see it; Maia p(best) is the human measure.
+  const shows = n.turn == null
+    ? `Deep: a quick engine search (depth 1–${T.depth}) never sees it in the next ${moves(T.punish.length)}.`
     : n.turn === 0
-      ? `Easy: a quick engine search already sees it after ${n.move}.`
-      : `Hard: a quick engine search only notices it after ${n.move}, ${moves(n.turn + 1)} later.`;
-  const rows = [['Cost', cost], ['To spot', spot]];
+      ? `Right away: a quick engine search already sees it after ${n.move}.`
+      : `Later: a quick engine search only sees it after ${n.move}, ${moves(n.turn)} later.`;
+  const rows = [['Cost', cost], ['Shows up', shows]];
   const w = worsened();
   if (w) rows.push(['Got worse', w]);
   return rows;

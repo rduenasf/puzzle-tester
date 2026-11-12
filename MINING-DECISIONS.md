@@ -274,6 +274,19 @@ My game move followed by Stockfish's depth-16 line from the mining cache, 12 pli
   (a single depth-3 score was off by 900cp in one position), taken only at my turns. With
   the opponent to move, a quick search sees threats against me I can still parry, which
   caused 500-900cp swings. Single spikes remain.
+- "Shows up" row (was "To spot: Easy/Hard", changed 2026-11-11): the first of my turns where
+  the gap between the two traces reaches `max(30, min(half the loss, 200))` cp
+  (`--critical-share`, `--critical-cap`). It says when a quick *engine* search sees the
+  damage, not how hard the move is for me: on 1,101 problems Easy and Hard had the same
+  median Maia p(best) (31% vs 28%), so Maia stays the human measure. Labels: right away /
+  later (names the move) / deep (never within the line).
+- Why the 200cp cap: with half the loss alone, an 854cp loss whose gap was 386cp at my next
+  turn (epic-straw-dowitcher) read "Hard, 4 moves later"; my rating notes called these
+  clear endgame transitions. The cap moved 11 problems to "right away" (662 right away,
+  280 later, 19 deep, 140 marginal).
+- From my notes on 11 of them: "deep" matched my own "deep" tag 2 of 3 times; the
+  delayed ones were mostly trapped pieces, which the material rule (§9.3) can miss when the
+  trap closes at the end of the 12 plies (sly-snow-vireo: "positional").
 
 ### 9.3 Positional or concrete: decided by material
 
