@@ -32,6 +32,56 @@ def pov_cp(score, color):
     return max(-CLAMP, min(CLAMP, score.pov(color).score(mate_score=100000)))
 
 
+# ---- trapped pieces (MINING-DECISIONS.md §9.7) ----
+VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
+
+
+def unsafe(b, sq, me):
+    """My piece on sq can be won: attacked by a cheaper piece, or attacked and undefended."""
+    att = [VAL[b.piece_type_at(s)] for s in b.attackers(not me, sq)]
+    if not att:
+        return False
+    return min(att) < VAL[b.piece_type_at(sq)] or not b.attackers(me, sq)
+
+
+def trapped(b, me):
+    """With me to move: my knights/bishops/rooks/queens that can be won where they stand and
+    have no move to a square where they can't (a capture worth at least the piece counts as safe)."""
+    out = []
+    for sq, pc in b.piece_map().items():
+        if pc.color != me or pc.piece_type in (chess.PAWN, chess.KING) or not unsafe(b, sq, me):
+            continue
+        escape = False
+        for mv in b.legal_moves:
+            if mv.from_square != sq:
+                continue
+            cap = b.piece_type_at(mv.to_square)
+            gain = VAL[cap] if cap else 0
+            b.push(mv)
+            bad = unsafe(b, mv.to_square, me) and gain < VAL[pc.piece_type]
+            b.pop()
+            if not bad:
+                escape = True
+                break
+        if not escape:
+            out.append(sq)
+    return out
+
+
+def first_trap(fen, seq, me):
+    """(index of my turn, ply, square) of the first trapped piece at my turns along seq, or None."""
+    b = chess.Board(fen)
+    t = 0
+    for k, mv in enumerate(seq):
+        b.push(mv)
+        if b.turn == me:
+            tr = trapped(b, me)
+            if tr:
+                return t, k, tr[0], b.piece_at(tr[0])
+            t += 1
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("js", help="Exported problems file to update in place")
@@ -48,6 +98,8 @@ def main():
     ap.add_argument("--marginal", type=int, default=30, help="Re-scored loss at or below this = marginal")
     ap.add_argument("--concrete-turns", type=int, default=3,
                     help="Material lost within this many of your turns = concrete")
+    ap.add_argument("--trap-gap", type=int, default=2,
+                    help="Trapped piece counts only if I end the line this many pawns down vs the best line")
     ap.add_argument("--stockfish", default=next((x for x in DEFAULT_SF if x and os.path.exists(x)), None))
     a = ap.parse_args()
 
@@ -152,6 +204,17 @@ def main():
                 b.push(mv)
             return f"{b.fullmove_number}{'.' if b.turn else '...'}" + b.san(punish[ply])
 
+        # A piece of mine gets trapped in the punishment line (earlier than any in the best
+        # line) and I end the line at least --trap-gap pawns down: the material rule above can
+        # call this positional when the piece falls at the very end of the line.
+        trap = None
+        tr_p, tr_b = first_trap(p["fen"], punish, me), first_trap(p["fen"], best, me)
+        if (kind != "marginal" and tr_p and (tr_b is None or tr_p[0] < tr_b[0])
+                and mat_gaps and mat_gaps[-1] >= a.trap_gap):
+            t, ply, sq, pc = tr_p
+            trap = {"turn": t, "ply": ply, "move": san_at(ply),
+                    "piece": pc.symbol().upper() + chess.square_name(sq)}
+
         crit_ply = plies_p[crit] if crit is not None else None   # eval: quick look sees it
         mat_ply = plies_p[mat_turn] if mat_turn is not None else None
         p["punish"] = [m.uci() for m in punish]
@@ -165,7 +228,8 @@ def main():
                        "matMove": san_at(mat_ply) if mat_ply is not None else None,
                        # the lasting loss (smallest gap from then on), not a mid-exchange peak
                        "matGap": min(mat_gaps[mat_turn:]) if mat_turn is not None else 0,
-                       "materialEnd": mat_diff, "gapEnd": gaps[-1] if gaps else None}
+                       "materialEnd": mat_diff, "gapEnd": gaps[-1] if gaps else None,
+                       "trapped": trap}
         return p
 
     done = [0]

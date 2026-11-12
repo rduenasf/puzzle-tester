@@ -352,6 +352,24 @@ the trainer from the FEN (Phase filter, "endgame" in the list). Measured on 1,10
 
 The two notes it misses are middlegames with queens on.
 
+### 9.7 Trapped pieces (2026-11-11)
+
+Trigger: sly-snow-vireo, perky-copper-rook and regal-claret-starling ("piece trapped" in my
+notes). The material rule (§9.3) called sly-snow-vireo positional: the knight falls at the
+last of my turns, so the loss doesn't hold for 2 turns.
+
+- Rule (`explain.py`): at each of my turns, a knight/bishop/rook/queen is trapped when it can
+  be won where it stands (attacked by a cheaper piece, or attacked and undefended) and every
+  move of it lands on such a square (a capture worth at least the piece counts as an escape).
+  Flagged only if it happens in the punishment line earlier than any trap in the best line,
+  the problem isn't marginal, and I end the line >= 2 pawns down (`--trap-gap`).
+- Prototype on the 2026-11-11 export: the bare rule fired on 46 problems, many of them
+  momentary (mid-exchange, recaptured); the end-of-line gap leaves 11, including all three
+  named ones. "The piece is captured later in the line" was tried as the filter instead and
+  dropped: it keeps exchanges and misses regal-claret-starling.
+- Trainer: the Cost row names the piece and the move after which it is trapped; it replaces
+  "no material lost" for positional problems. Not yet checked by me one by one.
+
 ## 10. Trainer (the site)
 
 - Modes: Mate (original), Strategy (the first 41 problems), Review (current 861, browsable).

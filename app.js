@@ -257,6 +257,7 @@ function fbSnapshot(p) {
     pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, flags: p.flags ?? null, checks: p.checks,
     playedLossNow: p.scores[p.played] ?? null,
     nature: p.nature?.kind ?? null,
+    trapped: p.nature?.trapped ? p.nature.trapped.piece : null,
     endgame: isEndgame(p),
     changedTop: p.changed?.explains && p.changed.terms.length ? p.changed.terms[0][0] : null,
     gameClock: p.gameClock ?? null,
@@ -420,7 +421,7 @@ function buildList() {
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
       p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '',
-      p.repeat ? REPEAT_LABEL[p.repeat] : '', isEndgame(p) ? 'endgame' : '']
+      p.repeat ? REPEAT_LABEL[p.repeat] : '', isEndgame(p) ? 'endgame' : '', p.nature?.trapped ? 'trapped piece' : '']
       .filter(Boolean).join(' · ');
     const st = document.createElement('span'); st.className = 'st';
     b.append(n, meta, st);
@@ -658,6 +659,7 @@ function timeLine() {
 // the eval trace only says when a quick look starts to see the damage.
 const pawns = (k) => `${k} pawn${k > 1 ? 's' : ''}`;
 const moves = (k) => `${k} move${k > 1 ? 's' : ''}`;
+const PIECE_NAME = { N: 'knight', B: 'bishop', R: 'rook', Q: 'queen' };
 
 // Three short answers: what it costs, how hard it is to spot, what got worse.
 function wrongRows() {
@@ -665,11 +667,20 @@ function wrongRows() {
   if (n.kind === 'marginal') {
     return [['Cost', `Barely a mistake: the engine rates your move only ${puzzle.scores[puzzle.played]}cp worse than the best.`]];
   }
-  const cost = {
+  let cost = {
     positional: `No material lost in the next ${moves(T.punish.length)}. Your position just got worse.`,
     positional_then_material: `Nothing at first, but from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
     concrete: `Material, quickly: from ${n.matMove} you are ${pawns(n.matGap)} down compared with the best line.`,
   }[n.kind] || n.kind;
+  // Trapped piece (explain.py): replaces "no material lost", which is wrong when the piece
+  // falls at the very end of the line.
+  const tr = n.trapped;
+  if (tr) {
+    const end = T.matBest.at(-1) - T.matPunish.at(-1);
+    const what = `${PIECE_NAME[tr.piece[0]]} on ${tr.piece.slice(1)}`;
+    const trapped = `Your ${what} is trapped after ${tr.move}: you end the line ${pawns(end)} down.`;
+    cost = n.kind === 'positional' ? trapped : `${cost} ${trapped}`;
+  }
   // When a quick engine search (not a human) starts to see it; Maia p(best) is the human measure.
   const shows = n.turn == null
     ? `Deep: a quick engine search (depth 1–${T.depth}) never sees it in the next ${moves(T.punish.length)}.`
