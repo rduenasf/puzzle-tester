@@ -140,8 +140,11 @@ function saveState() {
 
 // ---------- browse mode (Review): numbered list + filters ----------
 const isBrowse = () => !!MODES[mode].browse;
-// Permanent numbers: position in the exported file (#1..#N). A re-export renumbers.
+// Each problem has an id (hash of game link + FEN) and a name to remember (adjective-color-bird),
+// both from miner/phrases.py and the same in every export. Names can repeat; ids can't. numOf (position in the file) is kept only for "Go to" by number and snapshots.
 const numOf = new Map();
+// "stable-hazel-skimmer" → "Stable Hazel Skimmer"; a problem without a name shows its id as is.
+const nameOf = (p) => (p.name ? p.name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : p.id);
 for (const m of Object.values(MODES)) if (m.browse) m.pool.forEach((p, i) => numOf.set(p.id, i + 1));
 const KIND_LABEL = { single: 'regular', typical: 'typical', easy_miss: 'easy miss', blunder_check: 'blunder check', drift: 'drift' };
 // Rating-trend flags from the miner (stratmine/flags.py): how p(best) changes with Elo.
@@ -218,7 +221,7 @@ function renderFav() {
 $('fav').addEventListener('click', () => {
   const k = fbKey(puzzle);
   if (favorites[k]) delete favorites[k];
-  else favorites[k] = { at: new Date().toISOString(), id: puzzle.id, num: numOf.get(puzzle.id), fen: puzzle.fen, link: puzzle.link };
+  else favorites[k] = { at: new Date().toISOString(), id: puzzle.id, name: puzzle.name, num: numOf.get(puzzle.id), fen: puzzle.fen, link: puzzle.link };
   try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); } catch {}
   renderFav();
   refreshCounts('fav');
@@ -251,7 +254,7 @@ const fbOf = (p) => feedback[fbKey(p)];
 function fbSave() { try { localStorage.setItem(FB_KEY, JSON.stringify(feedback)); } catch {} }
 function fbSnapshot(p) {
   return {
-    id: p.id, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
+    id: p.id, name: p.name, num: numOf.get(p.id), fen: p.fen, link: p.link, date: p.date,
     played: p.played, minedBest: p.minedBest, best: p.line[0],
     kind: p.kind, timeClass: p.timeClass, timeControl: p.timeControl, maiaElo: p.maiaElo,
     pPlayed: p.pPlayed, pBest: p.pBest, pBestPlus: p.pBestPlus, pBestTop: p.pBestTop ?? null, flags: p.flags ?? null, checks: p.checks,
@@ -346,9 +349,16 @@ function loadStore() {
     if (s && s.done) store = { done: s.done, filters: s.filters || {}, current: s.current || null };
   } catch {}
 }
+// The name box: "Hazel", "hazel skimmer" or "#v51j" → "hazel", "hazel-skimmer", "v51j", matched
+// anywhere in the name or id. Only digits = a position for "Go to" (Enter), not a filter.
+const queryOf = (s) => {
+  const q = s.trim().replace(/^#/, '').toLowerCase().replace(/[\s_]+/g, '-');
+  return /^\d*$/.test(q) ? '' : q;
+};
+const matchesQuery = (p, q) => (p.name || '').includes(q) || p.id.includes(q);
 function filtered() {
   return pool().filter((p) => Object.entries(store.filters).every(([k, v]) =>
-    !v || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v)));
+    !v || (k === 'q' ? matchesQuery(p, v) : !FILTERS[k] || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v))));
 }
 function browseState() {
   let list = filtered();
@@ -397,6 +407,7 @@ function fillFilters() {
     }
     sel.value = store.filters[k] || '';
   }
+  $('f-num').value = (store.filters.q || '').replace(/-/g, ' ');
 }
 function refreshStatusCounts() { refreshCounts('status'); }
 function refreshCounts(k) {
@@ -417,7 +428,8 @@ function buildList() {
     const li = document.createElement('li');
     const b = document.createElement('button');
     b.type = 'button';
-    const n = document.createElement('span'); n.className = 'n'; n.textContent = `#${numOf.get(id)}`;
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = nameOf(p);
+    n.title = `${nameOf(p)}\n#${id}`;  // full name (it may be cut off) + id, which has no column
     const meta = document.createElement('span'); meta.className = 'meta';
     meta.textContent = [p.date, FILTERS.tc.of(p), KIND_LABEL[p.kind] || p.kind,
       p.nature ? NATURE_LABEL[p.nature.kind] : '', trendOf(p) !== 'none' ? TREND_LABEL[trendOf(p)] : '',
@@ -437,6 +449,7 @@ function buildList() {
 function applyFilters() {
   saveState();
   for (const k of Object.keys(FILTERS)) store.filters[k] = $(`f-${k}`).value;
+  store.filters.q = queryOf($('f-num').value);
   if (!filtered().length) {
     $('browser-summary').textContent = 'No problems match these filters';
     return;
@@ -444,26 +457,43 @@ function applyFilters() {
   state = browseState();
   saveState();
   buildList();
-  loadPuzzle(state.index);
+  // Still on the same problem (e.g. typing in the name box): keep the moves played so far.
+  if (puzzle && state.ids[state.index] === puzzle.id) renderProgress();
+  else loadPuzzle(state.index);
 }
 for (const k of Object.keys(FILTERS)) $(`f-${k}`).addEventListener('change', () => !busy && applyFilters());
 $('f-reset').addEventListener('click', () => {
   if (busy) return;
   for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
+  $('f-num').value = '';
   applyFilters();
 });
-$('f-go').addEventListener('submit', (e) => {
+let queryTimer = 0;
+$('f-num').addEventListener('input', () => {  // filter the list as you type
+  clearTimeout(queryTimer);
+  queryTimer = setTimeout(() => !busy && applyFilters(), 150);
+});
+$('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id, the first match, or position N
   e.preventDefault();
   if (busy) return;
-  const n = +$('f-num').value;
-  const p = pool()[n - 1];
-  if (!p) { setStatus(`There is no problem #${n} (1–${pool().length}).`, 'bad'); return; }
-  if (!state.ids.includes(p.id)) {  // outside the current filters: clear them
-    for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
-    store.current = p.id;
+  clearTimeout(queryTimer);
+  const raw = $('f-num').value.trim().replace(/^#/, '');
+  if (/^\d+$/.test(raw)) {
+    const p = pool()[+raw - 1];
+    if (!p) { setStatus(`There is no problem #${raw} (1–${pool().length}).`, 'bad'); return; }
+    if (!state.ids.includes(p.id)) {  // outside the current filters: clear them
+      for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
+      store.current = p.id;
+      applyFilters();
+    }
+    loadPuzzle(state.ids.indexOf(p.id));
+  } else {
     applyFilters();
+    const q = queryOf(raw);
+    if (q && !filtered().length) { setStatus(`No problem has "${raw}" in its name or id.`, 'bad'); return; }
+    const exact = state.ids.find((id) => id === q || pool().find((x) => x.id === id).name === q);
+    loadPuzzle(exact ? state.ids.indexOf(exact) : 0);
   }
-  loadPuzzle(state.ids.indexOf(p.id));
   rowEls[state.index]?.scrollIntoView({ block: 'nearest' });
 });
 
@@ -495,8 +525,12 @@ function loadPuzzle(i) {
   usedHelp = false;
   timing = false;
   if (isStrategy() && !state.results[i]) timerStart();
-  $('title').textContent = isBrowse() ? `Problem #${numOf.get(puzzle.id)}`
+  $('title').textContent = isBrowse() ? nameOf(puzzle)
     : isOrdered() ? `Puzzle ${i + 1} of ${state.ids.length} · ${puzzle.title}` : `Puzzle ${i + 1}`;
+  if (isBrowse() && puzzle.name) {  // the id, dimmed, after the name: "Stable Hazel Skimmer #v51jcqnaxv"
+    const pid = document.createElement('span'); pid.className = 'pid'; pid.textContent = `#${puzzle.id}`;
+    $('title').append(' ', pid);
+  }
   // Category badge next to the title; its description is the hover tooltip.
   const kindText = isStrategy() && puzzle.kind ? KIND_TEXT[puzzle.kind] || puzzle.kind : '';
   $('kind').hidden = !kindText;

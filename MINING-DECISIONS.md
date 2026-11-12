@@ -103,7 +103,13 @@ Rating-trend flags (tags on top of the category; they never keep or drop a probl
 - **engine_move** (shown as "engine move?"): p(best) falls >= 10 points at 2600 **or** >= 5
   points at + 500. `--engine-drop-top --engine-drop-plus`.
 
-The Lichess games produced no problems in any run.
+Lichess games do produce problems (an earlier note here said they never did; wrong since at
+least v2): 8 in v2, 22 in v3, 18 in v4, 24 in v5, 26 in v6 and in v7. v7's 26 come from 9 of
+the 19 Lichess games (2026-10-12 to 11-02): 24 bullet, 2 blitz; 10 regular, 8 typical, 5 easy
+miss, 3 blunder check. Their links are Lichess's own `Site` header
+(`https://lichess.org/game/<id>`, opens the game), so their stable ids work like chess.com's.
+Their Maia Elo comes from each game's header rating: 1342-1534 for bullet, 1723 for blitz,
+against the fixed 1692 (bullet) / 1755 (blitz) used for chess.com games (see §4).
 
 ### Volume history (730 games)
 
@@ -358,6 +364,17 @@ move with one SF14 MultiPV search (52 lines, depth 16):
   the table rates above it count as 0. The game move is graded with the table's number;
   "Why this problem" keeps the mining number (`checks.cpLoss`).
 - `explain.py` reads punishment lines from the cache at the mining depth (from _CONFIG).
+- Stable problem ids and names (2026-11-11, `miner/phrases.py`), both from sha1(game link +
+  "#" + FEN), so they depend only on the problem, never on what else is mined:
+  - id: 10 base32 chars (50 bits; ~5e-10 chance of any clash among 1,100). The key for done
+    marks, solve times and "Go to"; the export stops if two ever match.
+  - name: adjective-color-bird (260 x 110 x 228 = ~6.5M), a label to remember, shown as the
+    title and in the list. Names may repeat (~9% chance of one shared name among 1,100); no
+    tie-break, since any would depend on the rest of the set. "Go to" takes an id or a name
+    and lists the ids when a name is shared. Don't edit the word lists: that renames everything.
+  - v6's #753 is "quick indigo turaco", d9ete32eya. 563 of v6's problems keep their id in v7.
+  Favorites and ratings were already keyed by link + FEN and carry over; done marks and solve
+  times (keyed by the old position-based ids) start empty.
 - The PC slept overnight during one run; long runs now request keep-awake.
 
 ## 9. Explaining a mistake (trainer "What went wrong")
@@ -500,8 +517,8 @@ From `miner/` (Windows, Git Bash):
 
 ```bash
 .venv/Scripts/python.exe fetch_games.py --chesscom real_Holimion --lichess rduenasf --out work
-cd work && PYTHONPATH=.. ../.venv/Scripts/python.exe -m stratmine mine chesscom.pgn,lichess.pgn real_Holimion,rduenasf --since 2026-10-08 --out-pgn v5_problems.pgn --out-csv v5_problems.csv --out-quiz v5_quiz.pgn --features v5_features.csv
-cd .. && .venv/Scripts/python.exe export_site.py work/v5_problems.csv --out work/review.js --var STRATEGIC_REVIEW --id-prefix r --config work/v5_problems_config.json
+cd work && PYTHONPATH=.. ../.venv/Scripts/python.exe -m stratmine mine chesscom.pgn,lichess.pgn real_Holimion,rduenasf --since 2026-10-08 --out-pgn v7_problems.pgn --out-csv v7_problems.csv --out-quiz v7_quiz.pgn --features v7_features.csv
+cd .. && .venv/Scripts/python.exe export_site.py work/v7_problems.csv --out work/review.js --var STRATEGIC_REVIEW --config work/v7_problems_config.json
 .venv/Scripts/python.exe explain.py work/review.js
 .venv/Scripts/python.exe whatchanged.py work/review.js
 cp work/review.js ../strategic_review.js
