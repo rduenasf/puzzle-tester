@@ -419,8 +419,15 @@ My game move followed by Stockfish's line from the mining cache (mining depth), 
   before my recapture, or one at the end of the line, doesn't count), and the size reported
   is the lasting loss, not a mid-exchange peak.
 - Labels: positional (no lasting material loss in 6 turns), positional then material
-  (lasting loss from turn 4 on), concrete (within 3 turns), marginal (re-score loss <= 30).
+  (lasting loss from turn 4 on), concrete (within 3 turns), marginal (re-score loss <= 75).
 - Current 861: 623 positional, 73 positional then material, 72 concrete, 93 marginal.
+- Marginal 30 -> 75 (2026-11-11): 30cp is about the size of engine noise (§6.5), and a
+  31-75cp loss is what the trainer itself grades an Inaccuracy, not a strategic mistake.
+  On the 1,175-problem export: 152 marginal -> 637 (485 more: 432 from positional, 32
+  positional then material, 21 concrete); 538 remain. Review hides marginal problems by
+  default rather than dropping them, since some close ones may still be instructive (verdict
+  filter "all verdicts" shows them). The critical-ply floor stays 30 (`--critical-min`,
+  formerly tied to `--marginal`); traces and critical plies were unchanged by the split.
 
 ### 9.4 "What changed" from the classical eval
 
@@ -479,7 +486,8 @@ last of my turns, so the loss doesn't hold for 2 turns.
   engine in the browser: Best <= 10cp, Good <= 30cp count
   as solved; Inaccuracy <= 75, Mistake <= 150, Blunder above.
 - Review: numbered list (#1-#861 in export order; **a re-export renumbers**), filters by
-  category, verdict, what changed, time format and status, and Go to #. On screens >= 1200px
+  category, verdict (default "all but marginal", §9.3; Go to # or a name that is only
+  marginal switches it to "all verdicts"), what changed, time format and status, and Go to #. On screens >= 1200px
   the list is a sticky left column.
 - "Why this problem" (always visible) lists each check's value and threshold from the
   mining run; move names stay hidden until solved or revealed. "What went wrong" appears

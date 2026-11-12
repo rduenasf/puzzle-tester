@@ -172,7 +172,15 @@ const NATURE_LABEL = { positional: 'positional', positional_then_material: 'posi
 const STATUS_LABEL = { clean: '✓ clean', helped: '✓ with help', revealed: 'revealed' };
 const FILTERS = {
   cat: { label: 'all categories', of: (p) => p.kind, name: (v) => KIND_LABEL[v] || v },
-  nature: { label: 'all verdicts', of: (p) => p.nature && p.nature.kind, name: (v) => NATURE_LABEL[v] || v },
+  // Default ('') hides marginal problems (re-score loss <= 75cp, MINING-DECISIONS.md §9.3);
+  // 'all' brings them back. `always`: applies even when left at its default.
+  nature: {
+    label: 'all but marginal',
+    always: true,
+    of: (p) => p.nature && p.nature.kind,
+    match: (p, v) => (v === 'all' || (v ? FILTERS.nature.of(p) === v : FILTERS.nature.of(p) !== 'marginal')),
+    name: (v) => NATURE_LABEL[v] || v,
+  },
   trend: { label: 'any trend', of: trendOf, name: (v) => TREND_LABEL[v] || v },
   repeat: { label: 'any', of: repeatOf, name: (v) => REPEAT_LABEL[v] || v },
   phase: { label: 'any', of: phaseOf, name: (v) => (v === 'endgame' ? 'endgame' : 'opening/middlegame') },
@@ -357,13 +365,18 @@ const queryOf = (s) => {
   return /^\d*$/.test(q) ? '' : q;
 };
 const matchesQuery = (p, q) => (p.name || '').includes(q) || p.id.includes(q);
-const matchOne = (p, k, v) => !v || (k === 'q' ? matchesQuery(p, v)
-  : !FILTERS[k] || (FILTERS[k].match ? FILTERS[k].match(p, v) : FILTERS[k].of(p) === v));
+const matchOne = (p, k, v) => (k === 'q' ? !v || matchesQuery(p, v)
+  : !FILTERS[k] || (!v && !FILTERS[k].always)
+    || (FILTERS[k].match ? FILTERS[k].match(p, v || '') : FILTERS[k].of(p) === v));
+const ALWAYS = Object.keys(FILTERS).filter((k) => FILTERS[k].always);
 function filtered() {
-  return pool().filter((p) => Object.entries(store.filters).every(([k, v]) => matchOne(p, k, v)));
+  const keys = new Set([...Object.keys(store.filters), ...ALWAYS]);
+  return pool().filter((p) => [...keys].every((k) => matchOne(p, k, store.filters[k] || '')));
 }
 // Set filters as [key, value], and how each reads on screen: "Phase: endgame", "Name: hazel".
 const activeFilters = () => Object.entries(store.filters).filter(([k, v]) => v && (k === 'q' || FILTERS[k]));
+// Filters left at a default that still hides problems (the verdict filter's "all but marginal").
+const defaultHiding = () => ALWAYS.filter((k) => !store.filters[k]).map((k) => [k, '']);
 function filterText(k, v) {
   if (k === 'q') return `Name or id: "${v.replace(/-/g, ' ')}"`;
   const sel = $(`f-${k}`);
@@ -375,7 +388,8 @@ function noMatchNote(changed) {
   const v = store.filters[changed];
   const mine = changed && v ? pool().filter((p) => matchOne(p, changed, v)) : [];
   // Only the other filters that turn away at least one of those problems.
-  const hiding = activeFilters().filter(([k, x]) => k !== changed && mine.some((p) => !matchOne(p, k, x)));
+  const hiding = [...activeFilters(), ...defaultHiding()]
+    .filter(([k, x]) => k !== changed && mine.some((p) => !matchOne(p, k, x)));
   if (!mine.length || !hiding.length) return 'No problems match these filters.';
   const n = mine.length;
   return `${filterText(changed, v)} has ${n} problem${n === 1 ? '' : 's'} on its own, but `
@@ -402,7 +416,8 @@ function fillFilters() {
       o.value = value; o.textContent = text;
       sel.append(o);
     };
-    add('', f.label);
+    add('', f.always ? `${f.label} (${pool().filter((p) => f.match(p, '')).length})` : f.label);
+    if (k === 'nature') add('all', `all verdicts (${pool().length})`);
     if (k === 'status') {
       const n = (v) => pool().filter((p) => FILTERS.status.match(p, v)).length;
       for (const v of ['todo', 'done', 'clean', 'helped', 'revealed']) {
@@ -440,7 +455,7 @@ function refreshCounts(k) {
   const f = FILTERS[k];
   const sel = $(`f-${k}`);
   for (const o of sel.options) {
-    if (!o.value) continue;
+    if (!o.value && !f.always) continue;
     const n = pool().filter((p) => (f.match ? f.match(p, o.value) : f.of(p) === o.value)).length;
     o.textContent = o.textContent.replace(/\(\d+\)$/, `(${n})`);
   }
@@ -470,8 +485,10 @@ function buildList() {
   });
   const total = pool().length;
   const on = activeFilters().length;
-  $('browser-summary').textContent = !on ? `Problems (${total})`
-    : `Problems (${state.ids.length} of ${total} match · ${on} filter${on === 1 ? '' : 's'} on)`;
+  const hid = store.filters.nature ? 0 : pool().filter((p) => !matchOne(p, 'nature', '')).length;
+  const hidText = hid ? ` · ${hid} marginal hidden` : '';
+  $('browser-summary').textContent = !on ? `Problems (${state.ids.length}${hidText})`
+    : `Problems (${state.ids.length} of ${total} match · ${on} filter${on === 1 ? '' : 's'} on${hidText})`;
   $('browser-note').hidden = true;
   markActive();
 }
@@ -520,6 +537,7 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
     if (!p) { setStatus(`There is no problem #${raw} (1–${pool().length}).`, 'bad'); return; }
     if (!state.ids.includes(p.id)) {  // outside the current filters: clear them
       for (const k of Object.keys(FILTERS)) $(`f-${k}`).value = '';
+      if (!matchOne(p, 'nature', '')) $('f-nature').value = 'all';  // a marginal one: show marginal
       store.current = p.id;
       applyFilters();
     }
@@ -527,6 +545,12 @@ $('f-go').addEventListener('submit', (e) => {  // Enter: open the exact name/id,
   } else {
     applyFilters();
     const q = queryOf(raw);
+    // Only marginal problems have that name: show marginal rather than say there is none.
+    if (q && !filtered().length && !$('f-nature').value
+        && pool().some((p) => matchesQuery(p, q) && !matchOne(p, 'nature', ''))) {
+      $('f-nature').value = 'all';
+      applyFilters();
+    }
     if (q && !filtered().length) { setStatus(`No problem has "${raw}" in its name or id.`, 'bad'); return; }
     const exact = state.ids.find((id) => id === q || pool().find((x) => x.id === id).name === q);
     loadPuzzle(exact ? state.ids.indexOf(exact) : 0);

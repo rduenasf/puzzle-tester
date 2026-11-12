@@ -98,7 +98,10 @@ def main():
                     help="Critical ply = first ply where the shallow gap reaches this share of the loss")
     ap.add_argument("--critical-cap", type=int, default=200,
                     help="...or this many cp, whichever is smaller (a 380cp gap on an 850cp loss is plain to see)")
-    ap.add_argument("--marginal", type=int, default=30, help="Re-scored loss at or below this = marginal")
+    ap.add_argument("--critical-min", type=int, default=30,
+                    help="...but at least this many cp (below it the gap is engine noise)")
+    ap.add_argument("--marginal", type=int, default=75,
+                    help="Re-scored loss at or below this = marginal (an inaccuracy at most)")
     ap.add_argument("--concrete-turns", type=int, default=3,
                     help="Material lost within this many of your turns = concrete")
     ap.add_argument("--trap-gap", type=int, default=2,
@@ -191,7 +194,7 @@ def main():
         # Gap between the two shallow traces at each of my turns (best minus punishment).
         n = min(len(tp), len(tb))
         gaps = [tb[t] - tp[t] for t in range(n)]
-        need = max(a.marginal, min(a.critical_share * loss, a.critical_cap))
+        need = max(a.critical_min, min(a.critical_share * loss, a.critical_cap))
         crit = next((t for t, g in enumerate(gaps) if g >= need), None)  # index of my turn
         mat_diff = material(end_b, me) - material(end_p, me)  # pawns I'm worse off at the end
         # Material gap vs the best line at each of my turns. Stockfish's eval already contains
