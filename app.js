@@ -660,6 +660,7 @@ function loadPuzzle(i) {
   if (tail.childNodes.length) gameEl.append(tail);
   if (gameEl.childNodes.length) sub.append(' · ', gameEl);
   $('turn').className = `turn ${player}`;
+  $('turn').title = `${side(player)} to move`;
   setCue(startCue());
   $('summary').hidden = true;
   // A finished strategy problem keeps showing its game info and checks when revisited.
