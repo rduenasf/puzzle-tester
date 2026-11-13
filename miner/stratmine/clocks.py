@@ -57,6 +57,7 @@ class GameIndex:
 
     def __init__(self, paths):
         self.where = {}
+        self.names = {}  # url -> {"white": ..., "black": ...}
         for path in paths:
             with open(path, encoding="utf-8-sig") as f:
                 while True:
@@ -65,7 +66,12 @@ class GameIndex:
                     if h is None:
                         break
                     self.where[game_key(h)] = (path, pos)
+                    self.names[game_key(h)] = {"white": h.get("White", ""), "black": h.get("Black", "")}
         self.cache = {}
+
+    def players(self, url):
+        """{'white': name, 'black': name} from the game's headers, or None if the game isn't indexed."""
+        return self.names.get(url)
 
     def get(self, url):
         if url not in self.cache:
@@ -81,3 +87,16 @@ class GameIndex:
     def clock(self, url, fen):
         game = self.get(url)
         return clock_at(game, fen) if game else None
+
+    def prev_move(self, url, fen):
+        """{'san', 'uci'} of the game move that led to `fen`, or None."""
+        game = self.get(url)
+        if not game:
+            return None
+        node = game
+        while node.variations:
+            nxt = node.variations[0]
+            if nxt.board().fen() == fen:
+                return {"san": node.board().san(nxt.move), "uci": nxt.move.uci()}
+            node = nxt
+        return None

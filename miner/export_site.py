@@ -223,6 +223,8 @@ def main():
             "timeClass": r["time_class"],
             "date": r["date"],
             "link": r["game"],
+            # Players from the mined CSV; add_clocks below fills them from the PGN for older CSVs
+            **({"white": r["white"], "black": r["black"]} if r.get("white") and r.get("black") else {}),
             "maiaElo": int(r["maia_elo"]),
             "pPlayed": float(r["p_my"]),
             "pBest": float(r["p_best"]),

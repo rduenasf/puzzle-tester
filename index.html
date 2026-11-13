@@ -43,6 +43,10 @@
         <div id="review-sections" class="nav-sub" role="group" aria-label="Review section"></div>
       </li>
     </ul>
+    <button id="about-open" class="nav-item nav-about" type="button" title="About & credits" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span class="nav-label">About &amp; credits</span>
+    </button>
     <button id="nav-collapse" class="nav-item nav-collapse" type="button" aria-expanded="true" title="Collapse menu">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
       <span class="nav-label">Collapse</span>
@@ -67,6 +71,11 @@
 
     <details id="browser" class="browser" open hidden>
       <summary id="browser-summary">Problems</summary>
+      <div class="browser-tabs" role="tablist" aria-label="Left panel view">
+        <button id="tab-list" type="button" role="tab" aria-selected="true" aria-controls="pane-list">Problems</button>
+        <button id="tab-summary" type="button" role="tab" aria-selected="false" aria-controls="pane-summary">Puzzle summary</button>
+      </div>
+      <div id="pane-list" class="browser-pane" role="tabpanel" aria-labelledby="tab-list">
       <div class="filters search-row">
         <form id="f-go" class="go">
           <label>Name or id <input id="f-num" type="search" size="16" autocomplete="off" spellcheck="false" placeholder="e.g. hazel" title="Shows problems with this text in their name or id. Enter opens the first one; a number opens that position."></label>
@@ -91,6 +100,8 @@
       </div>
       <p id="browser-note" class="browser-note" role="status" hidden></p>
       <ol id="browser-list" class="browser-list" aria-label="Problems"></ol>
+      </div>
+      <div id="pane-summary" class="browser-pane summary-pane" role="tabpanel" aria-labelledby="tab-summary" hidden></div>
     </details>
 
     <section class="info">
@@ -111,9 +122,8 @@
         <div class="board-row">
           <div id="evalbar" class="evalbar" hidden role="img" aria-label="Engine evaluation"><div class="evalbar-fill"></div><span class="evalbar-num"></span></div>
           <div class="board-frame"><div id="board" class="board" aria-label="Chessboard"></div></div>
+          <div id="board-resize" class="board-resize" role="separator" aria-label="Resize the board" title="Drag to resize the board · double-click for full size" tabindex="0" hidden></div>
         </div>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-        <p id="detail" class="detail" hidden></p>
       </div>
 
       <aside class="panel" aria-label="Your line">
@@ -123,6 +133,7 @@
         </div>
         <p id="moves-empty" class="empty">Play the moves for both sides on the board.</p>
         <ol id="moves" class="moves"></ol>
+        <div class="panel-foot">
         <div class="move-nav" role="group" aria-label="Step through the moves">
           <button id="nav-first" type="button" class="small ghost" title="Start position (↑ or Home)" aria-label="Start position">«</button>
           <button id="nav-back" type="button" class="small ghost" title="Previous move (←)" aria-label="Previous move">‹</button>
@@ -140,6 +151,19 @@
           <button id="solution" type="button" class="ghost">Solution</button>
           <button id="punish" type="button" class="ghost" title="Your game move and the engine's answer to it" hidden>Punishment</button>
         </div>
+        <!-- Feedback on the line (results, errors, engine progress), the game detail and,
+             once a Review problem is finished, the other moves that count. -->
+        <section id="result" class="why result" hidden>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+          <p id="detail" class="detail" hidden></p>
+          <div id="alts" hidden>
+            <h3 class="alts-head">Other solutions</h3>
+            <div id="alts-list" class="alts-list"></div>
+            <p id="alts-note" class="why-note"></p>
+          </div>
+        </section>
+        </div>
+        <div id="summary-sections" class="summary-sections">
         <details id="spar" class="why spar">
           <summary>Play it out vs engine</summary>
           <div class="spar-opts">
@@ -196,6 +220,7 @@
           <textarea id="fb-note" rows="2" placeholder="Note (optional): what makes it good or bad?"></textarea>
           <p class="why-note">Saved in this browser. Export from the problem list for the miner.</p>
         </details>
+        </div>
       </aside>
     </div>
 
@@ -210,10 +235,27 @@
       <button id="summary-new" class="primary" type="button">Play a new set</button>
     </section>
 
-    <footer class="foot">
-      Drag or tap to move. Right-click for circles, right-drag for arrows (Shift/Alt change colour). <br>Move rules by <a href="https://github.com/jhlywa/chess.js">chess.js</a>. Board by <a href="https://github.com/lichess-org/chessground">Chessground</a> (lichess, GPL-3.0), pieces “cburnett” by Colin M.L. Burnett (CC BY-SA 3.0).<br>Engines: <a href="https://github.com/nmrugg/stockfish.js">Stockfish.js</a> (GPL-3.0), <a href="https://www.maiachess.com/">Maia-3</a> via the <a href="https://github.com/CSSLab/maia-platform-frontend">Maia platform</a> (GPL-3.0) and <a href="https://onnxruntime.ai/">ONNX Runtime</a> (MIT). <a href="https://github.com/rduenasf/puzzle-tester">Source</a>.
-    </footer>
   </main>
+
+  <dialog id="about" class="about" aria-labelledby="about-title">
+    <div class="about-head">
+      <h2 id="about-title">About &amp; credits</h2>
+      <button id="about-close" type="button" class="ghost small" aria-label="Close">✕</button>
+    </div>
+    <p>ChessHub: checkmate and strategy puzzles. Works offline. <a href="https://github.com/rduenasf/puzzle-tester" target="_blank" rel="noopener">Source code</a>.</p>
+    <h3>Board and rules</h3>
+    <ul>
+      <li>Move rules by <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a>.</li>
+      <li>Board by <a href="https://github.com/lichess-org/chessground" target="_blank" rel="noopener">Chessground</a> (lichess, GPL-3.0).</li>
+      <li>Pieces “cburnett” by Colin M.L. Burnett (CC BY-SA 3.0).</li>
+    </ul>
+    <h3>Engines</h3>
+    <ul>
+      <li><a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">Stockfish.js</a> (GPL-3.0).</li>
+      <li><a href="https://www.maiachess.com/" target="_blank" rel="noopener">Maia-3</a> via the <a href="https://github.com/CSSLab/maia-platform-frontend" target="_blank" rel="noopener">Maia platform</a> (GPL-3.0).</li>
+      <li><a href="https://onnxruntime.ai/" target="_blank" rel="noopener">ONNX Runtime</a> (MIT).</li>
+    </ul>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>

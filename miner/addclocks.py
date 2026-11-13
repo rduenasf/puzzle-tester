@@ -1,4 +1,5 @@
-"""Add the game clock ("gameClock": {"left", "spent"} in seconds) to an exported problem file, in place.
+"""Add the game clock ("gameClock": {"left", "spent"} in seconds), the players ("white", "black")
+and the move that led to the position ("prevMove": {"san", "uci"}) to an exported problem file, in place.
 
 Matches each problem to its source game by URL and position, so no engine work is needed.
 Daily games and games without [%clk] comments get no gameClock.
@@ -30,6 +31,13 @@ def add_clocks(js_path, index):
         if clk:
             p["gameClock"] = clk
             found += 1
+        names = index.players(p.get("link", ""))
+        if names and names["white"] and names["black"]:
+            p["white"], p["black"] = names["white"], names["black"]
+        prev = index.prev_move(p.get("link", ""), p["fen"])
+        p.pop("prevMove", None)
+        if prev:
+            p["prevMove"] = prev
         lines[i] = "  " + json.dumps(p, separators=(",", ":")) + ","
     with open(js_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

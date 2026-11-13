@@ -49,19 +49,44 @@ body {
   gap: 12px;
 }
 
-/* Wide screens in Review: problem list in a full-height column left of everything else. */
+/* Wide screens in Review: three columns, each as tall as the viewport at the sides:
+   problem list | header, board, controls | moves panel.
+   The middle column is as wide as the board can be: the viewport height minus the info row (one line of title, one of subtitle)
+   (feedback lives in the side panel), or whatever width the side columns' minimums leave.
+   The side columns share the rest 3:2 (the moves panel is the narrower), so the page fills the width. */
 @media (min-width: 1200px) {
   .app.browsing {
+    --left: 320px; --right-min: 224px; --gap: 24px;
     max-width: none;
     display: grid;
-    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto 1fr; /* header, info, board, controls, footer */
-    column-gap: 24px;
+    grid-template-columns:
+      minmax(var(--left), 3fr)
+      min(var(--board-cap, 100vw), calc(100vh - 86px), calc(100% - var(--left) - var(--right-min) - 2 * var(--gap)))
+      minmax(var(--right-min), 2fr);
+    grid-template-rows: auto 1fr; /* info, board (the page title is hidden: the menu shows where you are) */
+    height: 100vh; height: 100dvh; /* exactly the viewport, so the board row is what is left below the info */
+    column-gap: var(--gap);
     row-gap: 12px;
     align-items: start;
     justify-content: center;
   }
-  .app.browsing > * { grid-column: 2; }
+  .app.browsing > *, .app.browsing .board-col { grid-column: 2; }
+  .app.browsing .play { display: contents; }
+  .app.browsing > .top { display: none; }
+  /* The board column fills its row; fitBoard sizes the board to its width and height. */
+  .app.browsing .board-col { align-self: stretch; min-height: 0; }
+  /* Moves panel: full viewport height; the move list scrolls, the controls box stays at the bottom. */
+  .app.browsing .panel {
+    grid-column: 3; grid-row: 1 / -1;
+    position: sticky; top: 12px;
+    height: calc(100vh - 28px); height: calc(100dvh - 28px);
+  }
+  .app.browsing .panel > * { flex: none; }
+  .app.browsing .panel > .moves { flex: 1 1 auto; min-height: 2.2em; max-height: none; }
+  .app.browsing .panel-foot {
+    margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line);
+    max-height: 70%; overflow-y: auto; scrollbar-gutter: stable;
+  }
   .app.browsing > .browser {
     grid-column: 1;
     grid-row: 1 / -1;
@@ -74,16 +99,24 @@ body {
   @supports selector(::details-content) {
     .app.browsing > .browser[open] {
       display: flex; flex-direction: column;
-      /* 12px sticky top + 16px page bottom padding */
-      max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px);
+      /* full viewport height (12px sticky top + 16px page bottom padding), like the moves panel;
+         the list or summary takes what the tabs and Previous / Next leave */
+      height: calc(100vh - 28px); height: calc(100dvh - 28px);
     }
     .app.browsing > .browser::details-content {
       display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
     }
+    .app.browsing .browser-pane { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .app.browsing .browser-list { flex: 1 1 auto; min-height: 120px; max-height: none; }
+    .app.browsing .summary-pane { overflow-y: auto; max-height: none; }
   }
   /* Closed: the panel folds to a full-height strip on the left and the board takes the room. */
-  .app.browsing:has(> .browser:not([open])) { grid-template-columns: auto minmax(0, 1fr); }
+  .app.browsing:has(> .browser:not([open])) {
+    --left: 44px;
+    grid-template-columns: auto
+      min(var(--board-cap, 100vw), calc(100vh - 86px), calc(100% - var(--left) - var(--right-min) - 2 * var(--gap)))
+      minmax(var(--right-min), 2fr);
+  }
   .app.browsing > .browser:not([open]) {
     padding: 12px 8px;
     height: calc(100vh - 28px); height: calc(100dvh - 28px);
@@ -94,25 +127,13 @@ body {
   .app.browsing .browser-list .meta { white-space: normal; }
   .app.browsing .filters label { flex: 1 1 140px; }
   .app.browsing .filters select { width: 100%; }
-  /* Board as big as the viewport height allows (minus header, info, status, controls and footer),
-     so the whole page fits without scrolling; the side panel takes the remaining width, up to a cap. */
-  .app.browsing .play {
-    grid-template-columns:
-      min(calc(100vh - 290px), calc(100% - 16px - 280px))
-      minmax(280px, 560px);
-    align-items: stretch;
-  }
-  /* Side panel is exactly as tall as the board column and scrolls inside:
-     height 0 keeps it out of the row's sizing, min-height 100% fills the row. */
-  .app.browsing .panel { height: 0; min-height: 100%; overflow-y: auto; }
-  .app.browsing .panel > * { flex: none; }
-  /* title row spans just the board, so its buttons sit over the board's right edge */
-  .app.browsing .info { width: min(calc(100vh - 290px), calc(100% - 16px - 280px)); }
+  .app.browsing .info { width: auto; }
 }
+/* Review: name, players and game link need room; buttons drop below rather than squeeze them */
+.app.browsing .info { flex-wrap: wrap; }
+.app.browsing .info > div:first-child { flex: 1 1 260px; }
 @media (min-width: 1600px) {
-  .app.browsing { padding-left: 24px; padding-right: 24px; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
-  .app.browsing .play { gap: 24px; grid-template-columns: min(calc(100vh - 290px), calc(100% - 24px - 320px)) minmax(320px, 560px); }
-  .app.browsing .info { width: min(calc(100vh - 290px), calc(100% - 24px - 320px)); }
+  .app.browsing { --left: 340px; --right-min: 256px; padding-left: 24px; padding-right: 24px; }
 }
 
 .top { display: flex; align-items: center; gap: 8px; }
@@ -156,7 +177,7 @@ body { padding-left: var(--nav-w); }
 }
 .nav-item[aria-current="page"] svg { color: #8fd18f; }
 .nav-label { overflow: hidden; text-overflow: ellipsis; }
-.nav-collapse { color: var(--nav-muted); font-weight: 500; }
+.nav-collapse, .nav-about { color: var(--nav-muted); font-weight: 500; }
 .nav-collapse svg { transition: transform 0.15s; }
 html.nav-collapsed .nav-collapse svg { transform: rotate(180deg); }
 
@@ -254,6 +275,13 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 0.85rem; }
 }
 .kind[hidden] { display: none; }
 .subtitle { color: var(--muted); font-size: 0.95rem; }
+.subtitle .tc { display: inline-flex; align-items: center; gap: 3px; vertical-align: -2px; white-space: nowrap; }
+.subtitle .tc svg { flex: none; }
+.subtitle .nowrap { white-space: nowrap; }
+/* A border instead of text-decoration: an underline skips the inline-flex time control and the icons. */
+.subtitle .game-link { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+.subtitle .game-link:hover, .subtitle .game-link:focus-visible { color: var(--text); border-bottom-color: currentColor; }
+.subtitle .game-link .ext { width: 14px; height: 14px; margin-left: 5px; vertical-align: -2px; }
 .turn {
   width: 28px; height: 28px; border-radius: 50%;
   border: 2px solid var(--muted); flex: none;
@@ -274,13 +302,14 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
   padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
+.panel-foot { display: flex; flex-direction: column; gap: 10px; }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; }
 .panel h2 { margin: 0; font-size: 1rem; }
 .count { color: var(--muted); font-size: 0.85rem; }
 .empty { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .moves {
   list-style: none; margin: 0; padding: 0;
-  min-height: 2.2em; max-height: 260px; overflow-y: auto;
+  min-height: 2.2em; max-height: 260px; overflow-y: auto; scrollbar-gutter: stable;
   font-variant-numeric: tabular-nums;
 }
 .moves li { display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 4px; align-items: center; padding: 2px 0; }
@@ -292,6 +321,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .move-nav button { min-width: 40px; font-size: 1.05rem; }
 .move-nav .count { text-align: center; }
 .mv.skip { color: var(--muted); font-weight: 400; }
+.mv.prev { color: var(--muted); font-weight: 500; }
 .mv.cur { background: var(--last); }
 .mv.ok { background: rgba(63, 125, 88, 0.18); color: var(--accent); }
 .mv.ok::after { content: " ✓"; }
@@ -304,7 +334,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 /* Bar and board form one block with one shadow; app.js sizes the board (see fitBoard). */
 .board-row {
   display: flex; align-items: stretch; align-self: flex-start; max-width: 100%;
-  border-radius: 4px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  position: relative; border-radius: 4px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
 }
 .evalbar { position: relative; flex: 0 0 30px; overflow: hidden; background: #403a35; }
 .evalbar[hidden] { display: none; }
@@ -365,6 +395,20 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   transition: transform 0.15s;
 }
 .browser:not([open]) > summary::before { transform: translateY(-2px) rotate(45deg); } /* down: show */
+.browser-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 8px 0 0;
+  padding: 3px; border-radius: 10px; background: var(--line);
+}
+.browser-tabs button {
+  min-height: 32px; padding: 4px 8px; font-size: 0.85rem; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); box-shadow: none;
+}
+.browser-tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 600; }
+.summary-sections { display: flex; flex-direction: column; gap: 10px; }
+/* Previous / Next at the bottom of the left panel in Review, under the list or the summary */
+.browser > .controls { flex: none; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* Scroll panes keep room for their scrollbar, so content does not shift sideways when it starts to overflow. */
+.summary-pane { padding: 8px 0 4px; max-height: 70vh; overflow-y: auto; scrollbar-gutter: stable; }
 .filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin: 8px 0; }
 .filters label { display: grid; gap: 2px; color: var(--muted); font-size: 0.78rem; }
 .filters select, .filters input {
@@ -383,7 +427,7 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .filters.search-row .go, .app.browsing .filters.search-row label { flex: 1 1 auto; }
 .filters.search-row input { width: 100%; }
 .browser-list {
-  list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto;
+  list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; scrollbar-gutter: stable;
   border-top: 1px solid var(--line);
 }
 .browser-list button {
@@ -416,6 +460,8 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .maia-table th:first-child { text-align: left; }
 .maia-table thead th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
 .maia-table tbody th { font-weight: 500; }
+.alts-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.alts-list .alt small { color: var(--muted); font-weight: 400; }
 .why-note { margin: 8px 0 0; color: var(--muted); font-size: 0.8rem; }
 .wrong-text { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
 .wrong-text dt { font-weight: 600; color: var(--muted); font-size: 0.85em; padding-top: 0.15em; }
@@ -462,10 +508,45 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
 .summary h2 { margin: 0 0 6px; font-size: 1.15rem; }
 .summary p { margin: 0 0 12px; color: var(--muted); }
 
-.foot { color: var(--muted); font-size: 0.8rem; text-align: center; }
-.foot a { color: inherit; }
+
+/* About & credits: opened from the side menu */
+.about {
+  width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto;
+  padding: 16px 20px 20px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface); color: var(--text); font-size: 0.92rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+.about::backdrop { background: rgba(0, 0, 0, 0.45); }
+.about-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.about h2 { margin: 0; font-size: 1.1rem; }
+.about h3 { margin: 16px 0 4px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.about p { margin: 10px 0 0; }
+.about ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.about a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .board.shake { animation: none; }
 }
 .fav[aria-pressed="true"] { color: var(--warn); border-color: var(--warn); }
+
+/* Result box in the side panel: feedback on the line, the game detail, other solutions. */
+.result { display: grid; gap: 6px; }
+.result .status, .result .detail { text-align: left; margin: 0; }
+.result .status { min-height: 0; }
+.result .alts-head { margin: 4px 0 0; font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.result .alts-list { margin-top: 4px; }
+
+/* Review: drag the board's bottom-right corner to make it smaller (app.js, boardCap). */
+.board-resize {
+  position: absolute; right: 0; bottom: 0; z-index: 5;
+  width: 22px; height: 22px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.28) 50%);
+  border-top-left-radius: 4px; opacity: 0.55; transition: opacity 0.15s;
+}
+.board-resize::after { /* two grip lines */
+  content: ""; position: absolute; right: 3px; bottom: 3px; width: 9px; height: 9px;
+  background: linear-gradient(135deg, transparent 40%, #fff 40%, #fff 52%, transparent 52%, transparent 70%, #fff 70%, #fff 82%, transparent 82%);
+}
+.board-resize:hover, .board-resize:focus-visible, .resizing-board .board-resize { opacity: 1; }
+.board-resize:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.resizing-board { cursor: nwse-resize; user-select: none; }

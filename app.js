@@ -628,19 +628,46 @@ function loadPuzzle(i) {
   $('repeat').title = repTip.charAt(0).toUpperCase() + repTip.slice(1);
   $('repeat').setAttribute('aria-label', repText);
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
-  $('subtitle').textContent = `${side(player)} to move`
-    + (puzzle.timeClass ? ` · ${puzzle.timeClass}${tc && tc !== 'daily' ? ` ${tc}` : ''}` : '');
+  const sub = $('subtitle');
+  sub.textContent = `${side(player)} to move`;
+  // Time control and players; with a source game it's all one link to it, in a new tab.
+  const gameEl = document.createElement(puzzle.link ? 'a' : 'span');
+  if (puzzle.link) {
+    gameEl.className = 'game-link';
+    gameEl.href = gameLinkAt(puzzle.link, puzzle.fen); gameEl.target = '_blank'; gameEl.rel = 'noopener noreferrer';
+    gameEl.title = 'Open the game in a new tab';
+  }
+  if (puzzle.timeClass) {
+    const icon = TIME_ICONS[puzzle.timeClass];
+    const tcEl = document.createElement('span');
+    tcEl.className = 'tc';
+    if (icon) {
+      tcEl.innerHTML = icon;
+      tcEl.title = puzzle.timeClass.charAt(0).toUpperCase() + puzzle.timeClass.slice(1);
+      tcEl.setAttribute('aria-label', puzzle.timeClass);
+    } else tcEl.textContent = puzzle.timeClass;
+    if (tc && tc !== 'daily') tcEl.append(icon ? tc : ` ${tc}`);
+    gameEl.append(tcEl);
+  }
+  if (puzzle.white && puzzle.black) {
+    gameEl.append(`${gameEl.childNodes.length ? ' · ' : ''}${puzzle.white} (White) vs ${puzzle.black} `);
+  }
+  // The last word and the icon don't break apart.
+  const tail = document.createElement('span');
+  tail.className = 'nowrap';
+  if (puzzle.white && puzzle.black) tail.append('(Black)');
+  if (puzzle.link) tail.insertAdjacentHTML('beforeend', EXTERNAL_ICON);
+  if (tail.childNodes.length) gameEl.append(tail);
+  if (gameEl.childNodes.length) sub.append(' · ', gameEl);
   $('turn').className = `turn ${player}`;
-  setStatus(state.results[i]
-    ? 'Already done — play it again or move on.'
-    : isStrategy()
-      ? 'No tactics here: find the best plan. Play your move, then Submit.'
-      : 'Find the best line. Play both sides, then Submit.');
+  setCue(startCue());
   $('summary').hidden = true;
   // A finished strategy problem keeps showing its game info and checks when revisited.
   $('fb-saved').textContent = '';
   renderFeedback();
   renderFav();
+  $('alts').hidden = true;
+  syncResult();
   if (state.results[i] && isStrategy()) showGameDetail();
   else { showWhy(false); $('wrong').hidden = true; }
   // Snap to the new puzzle instead of animating from the previous position.
@@ -651,6 +678,12 @@ function loadPuzzle(i) {
 }
 
 const side = (c) => (c === 'w' ? 'White' : 'Black');
+// The cue above the move list when a problem opens.
+const startCue = () => (state.results[state.index]
+  ? 'Already done — play it again or move on.'
+  : isStrategy()
+    ? 'No tactics here: find the best plan. Play your move, then Submit.'
+    : 'Find the best line. Play both sides, then Submit.');
 
 function enterMove(from, to) {
   if (spar) return sparMove(from, to);
@@ -677,8 +710,8 @@ function enterMove(from, to) {
   game.move({ from, to, promotion });
   hints = [];
   verdict = null; // editing the line clears an old verdict
-  if (plies() >= maxPlies() || game.isGameOver()) setStatus('Ready — hit Submit.');
-  else setStatus(`${side(game.turn())} to play.`);
+  if (plies() >= maxPlies() || game.isGameOver()) setCue('Ready — hit Submit.');
+  else setCue(`${side(game.turn())} to play.`);
   render();
   return true;
 }
@@ -729,7 +762,8 @@ const sanOf = (fen, u) => {
 const fmtEval = (cp) => (cp >= 0 ? '+' : '\u2212') + (Math.abs(cp) / 100).toFixed(2);
 
 // After a strategy problem is solved or revealed: the game move and a link to the game.
-function showGameDetail() {
+function showGameDetail(mine) {
+  showAlts(mine);
   const el = $('detail');
   el.textContent = '';
   const played = puzzle.played;
@@ -746,6 +780,7 @@ function showGameDetail() {
   const t = timeLine();
   if (t) el.append(document.createElement('br'), t);
   el.hidden = false;
+  syncResult();
   showWhy(true);
   showWrong();
 }
@@ -831,6 +866,80 @@ function showWrong() {
   box.hidden = false;
 }
 
+// ---------- "Other solutions" (Review only): every move that also counts, once a problem is finished ----------
+// Each move within STRATEGY_OK of the best; only the engine's move has a line to play out.
+// `mine`: the move the user played (UCI), marked "yours"; omitted when revealed or revisited.
+function showAlts(mine) {
+  const box = $('alts'), list = $('alts-list');
+  list.textContent = '';
+  if (mode !== 'review') { box.hidden = true; return; }
+  const main = puzzle.line[0];
+  const alts = Object.entries(puzzle.scores).filter(([, cp]) => cp <= STRATEGY_OK)
+    .sort((a, b) => a[1] - b[1] || (b[0] === main) - (a[0] === main))
+    .map(([u, cp]) => ({ u, cp, line: u === main ? puzzle.line.slice(0, SOLUTION_PLIES) : null }));
+  for (const a of alts) {
+    const san = sanOf(puzzle.fen, a.u);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ghost small alt';
+    b.textContent = san;
+    const tags = [];
+    if (a.u === mine) tags.push('yours');
+    tags.push(a.u === main ? 'engine' : `−${a.cp}cp`);
+    const sm = document.createElement('small');
+    sm.textContent = tags.join(' · ');
+    b.append(' ', sm);
+    b.title = `Play out the engine line after ${san}`;
+    b.addEventListener('click', () => {
+      if (busy) return;
+      if (a.u === main) showLine(a.line, a.line.length - 1, true, `engine line after ${san}`);
+      else playAltLine(a.u, san);
+    });
+    list.append(b);
+  }
+  $('alts-note').textContent = alts.length === 1
+    ? 'Only one move counts here.'
+    : `Every move within ${STRATEGY_OK}cp of the engine's best counts. Click one to play out its line: `
+      + "the engine's move from the mined analysis, the others from Stockfish in your browser.";
+  box.hidden = !alts.length;
+  syncResult();
+}
+
+// The mined data only has a line for the best move, so for the others Stockfish searches the
+// position after the move here. Lines are kept per problem for the session.
+const ALT_MOVETIME = 2000;
+const altLines = new Map(); // "id|uci" -> { line, score, turn }
+let altToken = 0;
+async function playAltLine(u, san) {
+  const key = `${puzzle.id}|${u}`, token = ++altToken, id = puzzle.id;
+  let hit = altLines.get(key);
+  if (!hit) {
+    const g = new Chess(puzzle.fen);
+    pushTo(g, u);
+    if (g.isGameOver()) hit = { line: [u], score: null };
+    else {
+      if (!engines.evalSf?.ready) {
+        evalSf().onProgress = (got, total) => setStatus(`Downloading Stockfish… ${Math.min(99, Math.round((100 * got) / total))}%`);
+        setStatus(sfFull() ? `Loading Stockfish (${SF_MB} MB the first time)…` : 'Loading Stockfish…');
+      }
+      let r;
+      try {
+        if (token === altToken) setStatus(`Stockfish is analysing ${san}…`);
+        r = await evalSf().search(g.fen(), { movetime: ALT_MOVETIME });
+      } catch (err) {
+        if (token === altToken && puzzle.id === id) setStatus(`Stockfish failed: ${err.message}`, 'bad');
+        return;
+      }
+      hit = { line: [u, ...r.pv].slice(0, SOLUTION_PLIES), score: r.score, turn: g.turn() };
+    }
+    altLines.set(key, hit);
+  }
+  // Another move was clicked, or another problem loaded, while it searched.
+  if (token !== altToken || puzzle.id !== id || busy) return;
+  const ev = hit.score ? ` (${fmtScore(hit.score, hit.turn)})` : '';
+  showLine(hit.line, hit.line.length - 1, hit.line.length > 1, `Stockfish line after ${san}${ev}`);
+}
+const pushTo = (g, u) => g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
+
 // Show a line on the board (view only): up to and including index `upto`.
 function showLine(line, upto, animate, name) {
   if (busy || !line) return;
@@ -873,6 +982,7 @@ function setDetail(text) {
   const el = $('detail');
   el.textContent = text;
   el.hidden = !text;
+  syncResult();
 }
 
 // "Puzzle context": every mining check with its value and threshold.
@@ -960,6 +1070,30 @@ function showMaia(finished) {
   box.hidden = false;
 }
 
+// Time class icons for the subtitle (the name is the tooltip): a bullet, a lightning bolt, a clock.
+const svgIcon = (body, fill = false) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="${fill ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+// The game link, opened at the puzzle position: the plies played so far, from the FEN's move
+// number and side to move. chess.com takes ?move=<ply>, Lichess #<ply>.
+function gameLinkAt(link, fen) {
+  const [, turn, , , , full] = fen.split(' ');
+  const ply = ((+full || 1) - 1) * 2 + (turn === 'b' ? 1 : 0);
+  try {
+    const u = new URL(link);
+    if (u.hostname.endsWith('chess.com')) u.searchParams.set('move', ply);
+    else if (u.hostname.endsWith('lichess.org')) u.hash = String(ply);
+    else return link;
+    return u.href;
+  } catch { return link; }
+}
+// Arrow leaving a box: opens elsewhere.
+const EXTERNAL_ICON = svgIcon('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')
+  .replace('<svg', '<svg class="ext"');
+const TIME_ICONS = {
+  bullet: svgIcon('<path d="M11 8h2.5c4 0 7.5 2 7.5 4s-3.5 4-7.5 4H11z" fill="currentColor" stroke="none"/><rect x="2.5" y="8" width="6.5" height="8" rx="1" fill="currentColor" stroke="none"/>'),
+  blitz: svgIcon('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', true),
+  rapid: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+};
+
 // "120+1" -> "2+1", "600" -> "10+0", "1/86400" -> "daily"
 function fmtTimeControl(tc) {
   if (!tc || tc === '-') return '';
@@ -985,7 +1119,7 @@ function submit() {
       saveState();
       const extra = verdict.loss <= 10 ? "the engine's choice." : `only ${verdict.loss}cp worse than the best.`;
       setStatus(`${verdict.label}! ${verdict.san} \u2014 ${extra}`, 'good');
-      showGameDetail();
+      showGameDetail(uci(moves[0]));
       if (state.results.every(Boolean)) showSummary();
     } else {
       mistakes++;
@@ -1020,14 +1154,14 @@ function undo() {
   if (busy || solved() || !plies()) return;
   game.undo();
   hints = []; verdict = null;
-  setStatus(`${side(game.turn())} to play.`);
+  setCue(`${side(game.turn())} to play.`);
   render();
 }
 function clearLine() {
   if (busy || solved() || spar) return;
   while (game.undo());
   hints = []; verdict = null;
-  setStatus('Line cleared.');
+  setCue(startCue());
   render();
 }
 
@@ -1132,10 +1266,22 @@ function shake() {
 }
 
 // ---------- rendering ----------
+// Feedback (results, errors, engine progress) goes in the result box in the side panel.
 function setStatus(text, kind = '') {
   const el = $('status');
   el.textContent = text;
   el.className = `status ${kind}`;
+  el.hidden = !text;
+  syncResult();
+}
+// The cue (what to do next) sits above the move list; setting it clears old feedback.
+function setCue(text) {
+  $('moves-empty').textContent = text;
+  setStatus('');
+}
+// The result box shows while any of its parts has something in it.
+function syncResult() {
+  $('result').hidden = $('status').hidden && $('detail').hidden && $('alts').hidden;
 }
 
 const COLOR = { w: 'white', b: 'black' };
@@ -1183,7 +1329,7 @@ function render() {
   const cfg = {
     orientation: COLOR[flipped ? (player === 'w' ? 'b' : 'w') : player],
     turnColor: COLOR[pos.turn()],
-    lastMove: last ? [last.from, last.to] : undefined,
+    lastMove: last ? [last.from, last.to] : puzzle.prevMove ? [puzzle.prevMove.uci.slice(0, 2), puzzle.prevMove.uci.slice(2, 4)] : undefined,
     check: pos.inCheck(),
     movable: { color: canMove ? COLOR[pos.turn()] : undefined, dests: canMove ? legalDests(pos) : new Map() },
   };
@@ -1219,6 +1365,24 @@ function renderMoves(hist, at) {
   const fen = puzzle.fen.split(' ');
   let num = +fen[5] || 1;
   let row = null;
+  // The game move that led to the puzzle, greyed out: "14. … Qb3" before White's turn,
+  // "14. Qb3" before Black's, which leaves Black's move to fill in on the same row.
+  const prev = puzzle.prevMove;
+  if (prev) {
+    const blackPrev = fen[1] === 'w';
+    row = document.createElement('li');
+    const n = document.createElement('span');
+    n.className = 'num';
+    n.textContent = `${blackPrev ? num - 1 : num}.`;
+    row.appendChild(n);
+    if (blackPrev) row.appendChild(cell('…', 'skip'));
+    const c = cell(prev.san, `prev${at === 0 && hist.length ? ' cur' : ''}`);
+    c.dataset.ply = 0;
+    c.title = 'The game move before the puzzle. Show the starting position';
+    row.appendChild(c);
+    ol.appendChild(row);
+    if (blackPrev) row = null;
+  }
   hist.forEach((m, i) => {
     const white = m.color === 'w';
     if (white || !row) {
@@ -1240,10 +1404,6 @@ function renderMoves(hist, at) {
     if (!white) { num++; row = null; }
   });
   $('moves-count').textContent = spar ? 'vs engine' : !isStrategy() && hist.length >= maxPlies() ? 'max moves' : '';
-  $('moves-empty').textContent = isStrategy()
-    ? 'Play your move on the board.'
-    : 'Play the moves for both sides on the board.';
-  $('moves-empty').hidden = hist.length > 0;
 }
 function cell(text, cls) {
   const s = document.createElement('span');
@@ -1333,9 +1493,44 @@ new ResizeObserver(() => cg.redrawAll()).observe(boardEl);
 // on the right and bottom. The eval bar, when shown, takes its width from the same column.
 const boardCol = boardEl.closest('.board-col');
 const frameEl = boardEl.closest('.board-frame');
+const wideReview = window.matchMedia('(min-width: 1200px)'); // matches the three-column Review layout in styles.css
+wideReview.addEventListener('change', () => fitBoard());
+
+// Review: the board can be made smaller with the corner handle (never bigger than it fits).
+// boardCap is the board's width in CSS px, or 0 for "as big as fits"; it's kept across
+// problems and reloads. On wide screens the middle column shrinks with it (--board-cap in
+// styles.css), so the side columns get the room.
+const BOARD_SIZE_KEY = 'review-board-size';
+const BOARD_MIN = 240;
+let boardCap = (() => { try { return Math.max(0, +localStorage.getItem(BOARD_SIZE_KEY) || 0); } catch { return 0; } })();
+const barWidth = () => ($('evalbar').hidden ? 0 : $('evalbar').offsetWidth);
+// The biggest the board could be right now: in wide Review the column could also take the
+// side columns' room above their minimum widths, and the height below the title caps it.
+function boardMaxSize() {
+  let w = boardCol.clientWidth;
+  if (wideReview.matches) {
+    const app = document.querySelector('.app');
+    const cs = getComputedStyle(app);
+    const [l, , r] = cs.gridTemplateColumns.split(' ').map(parseFloat);
+    const min = (v) => parseFloat(cs.getPropertyValue(v)) || 0;
+    const folded = !$('browser').open;
+    w += Math.max(0, l - (folded ? l : min('--left'))) + Math.max(0, r - min('--right-min'));
+    return Math.min(w - barWidth(), boardCol.clientHeight);
+  }
+  return w - barWidth();
+}
+function applyBoardCap() {
+  const on = isBrowse() && boardCap > 0;
+  document.documentElement.style.setProperty('--board-cap', on ? `${boardCap + barWidth()}px` : '');
+  $('board-resize').hidden = !isBrowse();
+}
+
 function fitBoard() {
-  const bar = $('evalbar');
-  const avail = boardCol.clientWidth - (bar.hidden ? 0 : bar.offsetWidth);
+  let avail = boardCol.clientWidth - barWidth();
+  // Wide Review: the column is stretched to the height left below the title, so the board
+  // also fits that (e.g. when a long subtitle wraps onto a second line).
+  if (isBrowse() && wideReview.matches) avail = Math.min(avail, boardCol.clientHeight);
+  if (isBrowse() && boardCap) avail = Math.min(avail, boardCap);
   const dpr = window.devicePixelRatio || 1;
   const px = Math.floor((avail * dpr) / 8) * 8;
   if (px <= 0) return;
@@ -1345,6 +1540,50 @@ function fitBoard() {
   boardEl.style.width = boardEl.style.height = `${(px + 0.5) / dpr}px`;
 }
 new ResizeObserver(fitBoard).observe(boardCol);
+
+function setBoardCap(size, save = true) {
+  const max = boardMaxSize();
+  boardCap = size >= max - 4 ? 0 : Math.round(Math.max(BOARD_MIN, size));
+  if (save) try { boardCap ? localStorage.setItem(BOARD_SIZE_KEY, boardCap) : localStorage.removeItem(BOARD_SIZE_KEY); } catch {}
+  applyBoardCap();
+  fitBoard();
+}
+{
+  // Drag the corner: the board follows the pointer diagonally.
+  const h = $('board-resize');
+  let start = null;
+  h.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    h.setPointerCapture(e.pointerId);
+    start = { x: e.clientX, y: e.clientY, size: frameEl.getBoundingClientRect().width, max: boardMaxSize() };
+    document.body.classList.add('resizing-board');
+  });
+  h.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const d = Math.max(e.clientX - start.x, e.clientY - start.y);
+    // Measure the max once per drag: the column shrinks with the cap while dragging.
+    const size = Math.min(start.max, start.size + d);
+    boardCap = size >= start.max - 4 ? 0 : Math.round(Math.max(BOARD_MIN, size));
+    applyBoardCap();
+    fitBoard();
+  });
+  const end = () => {
+    if (!start) return;
+    start = null;
+    document.body.classList.remove('resizing-board');
+    try { boardCap ? localStorage.setItem(BOARD_SIZE_KEY, boardCap) : localStorage.removeItem(BOARD_SIZE_KEY); } catch {}
+  };
+  h.addEventListener('pointerup', end);
+  h.addEventListener('pointercancel', end);
+  h.addEventListener('dblclick', () => setBoardCap(Infinity));
+  // Keyboard: arrows shrink or grow by 24px, Home for full size.
+  h.addEventListener('keydown', (e) => {
+    const step = { ArrowUp: -24, ArrowLeft: -24, ArrowDown: 24, ArrowRight: 24 }[e.key];
+    if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); setBoardCap(Infinity); }
+    else if (step) { e.preventDefault(); e.stopPropagation(); setBoardCap(frameEl.getBoundingClientRect().width + step); }
+  });
+}
+applyBoardCap();
 fitBoard();
 // Chessground caches where the board is on screen and only refreshes that on resize or
 // scroll. Content above the board (e.g. the long number grid of a Polgár section) can move
@@ -1395,7 +1634,7 @@ function setEvalBar(share, label) {
 function renderEvalBar(pos, orientation) {
   const bar = $('evalbar');
   const on = !!spar && sparCfg.evalbar;
-  if (bar.hidden === on) { bar.hidden = !on; fitBoard(); }
+  if (bar.hidden === on) { bar.hidden = !on; applyBoardCap(); fitBoard(); }
   if (!on) { evalState.want = null; return; }
   bar.classList.toggle('flipped', orientation === 'black');
   const fen = pos.fen();
@@ -1460,7 +1699,7 @@ function stopSpar() {
   while (game.undo());
   s.line.forEach(pushUci);
   verdict = s.verdict; hints = s.hints;
-  setStatus('Back to the puzzle.');
+  setCue(startCue());
   renderSpar();
   render();
 }
@@ -1519,7 +1758,7 @@ async function engineTurn() {
   if (game.isGameOver() || game.turn() === spar.me) { sparStatus(); render(); return; }
   const token = spar.token, fen = game.fen();
   spar.thinking = true;
-  setStatus(`${sparName()} is thinking…`);
+  setCue(`${sparName()} is thinking…`);
   render();
   let r;
   try {
@@ -1545,7 +1784,7 @@ function sparStatus() {
   if (!spar) return;
   if (game.isCheckmate()) setStatus(`Checkmate: ${side(game.turn() === 'w' ? 'b' : 'w')} wins.`, game.turn() === spar.me ? 'bad' : 'good');
   else if (game.isGameOver()) setStatus('Draw.');
-  else setStatus(`Your move (${side(spar.me)}) against ${sparName()}.`);
+  else setCue(`Your move (${side(spar.me)}) against ${sparName()}.`);
   $('spar-info').textContent = spar.note || `You play ${side(spar.me)}. Undo takes back your last move.`;
 }
 
@@ -1594,8 +1833,15 @@ $('spar-swap').addEventListener('click', () => {
 $('spar-stop').addEventListener('click', stopSpar);
 
 // ---------- buttons ----------
-$('prev').addEventListener('click', () => !busy && state.index > 0 && loadPuzzle(state.index - 1));
-$('next').addEventListener('click', () => !busy && state.index < state.ids.length - 1 && loadPuzzle(state.index + 1));
+// Previous / Next (and Shift+←/→): in Review, keep the new current row in view in the problem list.
+function stepPuzzle(d) {
+  const i = state.index + d;
+  if (busy || i < 0 || i >= state.ids.length) return;
+  loadPuzzle(i);
+  if (isBrowse() && !$('pane-list').hidden) rowEls[state.index]?.scrollIntoView({ block: 'nearest' });
+}
+$('prev').addEventListener('click', () => stepPuzzle(-1));
+$('next').addEventListener('click', () => stepPuzzle(1));
 $('undo').addEventListener('click', undo);
 $('clear').addEventListener('click', clearLine);
 $('submit').addEventListener('click', submit);
@@ -1628,6 +1874,8 @@ function setMode(m) {
   }
   $('new-set').hidden = isBrowse() || isOrdered();
   document.querySelector('.app').classList.toggle('browsing', isBrowse());
+  placeSummarySections();
+  applyBoardCap();
   if (isBrowse()) { loadStore(); fillFilters(); }
   state = loadState() || newSet();
   saveState();
@@ -1637,6 +1885,39 @@ function setMode(m) {
   if (state.results.every(Boolean)) showSummary();
 }
 for (const k of Object.keys(MODES)) $(`mode-${k}`).addEventListener('click', () => { closeNav(); if (mode !== k) setMode(k); });
+
+// ---------- Review left panel: switch between the problem list and the puzzle summary ----------
+// In Review the per-puzzle sections (play it out, context, Maia, what went wrong, rating) live in the
+// left panel's "Puzzle summary" view; in the other modes they stay in the side panel under the moves.
+const LEFT_TAB_KEY = 'review-left-tab';
+// Previous / Next sit at the bottom of the left panel, under either view; elsewhere under the board.
+const controlsEl = document.querySelector('.controls');
+function placeSummarySections() {
+  const sec = $('summary-sections');
+  if (isBrowse()) {
+    if (sec.parentElement !== $('pane-summary')) $('pane-summary').append(sec);
+    if (controlsEl.parentElement !== $('browser')) $('browser').append(controlsEl);
+  } else {
+    if (sec.parentElement !== document.querySelector('.panel')) document.querySelector('.panel').append(sec);
+    if (controlsEl.previousElementSibling !== document.querySelector('.play')) document.querySelector('.play').after(controlsEl);
+  }
+}
+function setLeftTab(tab, save = true) {
+  const summary = tab === 'summary';
+  $('pane-list').hidden = summary;
+  $('pane-summary').hidden = !summary;
+  $('tab-list').setAttribute('aria-selected', String(!summary));
+  $('tab-summary').setAttribute('aria-selected', String(summary));
+  if (save) try { localStorage.setItem(LEFT_TAB_KEY, tab); } catch {}
+  if (!summary) rowEls[state?.index]?.scrollIntoView({ block: 'nearest' });
+}
+$('tab-list').addEventListener('click', () => setLeftTab('list'));
+$('tab-summary').addEventListener('click', () => setLeftTab('summary'));
+{
+  let t = 'list';
+  try { t = localStorage.getItem(LEFT_TAB_KEY) || 'list'; } catch {}
+  setLeftTab(t, false);
+}
 
 // ---------- left menu: collapse to icons (desktop), drawer (phones) ----------
 const NAV_KEY = 'nav-collapsed';
@@ -1667,6 +1948,14 @@ $('nav-open').addEventListener('click', () => {
 });
 $('nav-backdrop').addEventListener('click', closeNav);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && root.classList.contains('nav-open')) closeNav(); });
+
+// About & credits dialog (attribution for the libraries, pieces and engines). Esc closes it natively.
+$('about-open').addEventListener('click', () => { closeNav(); $('about').showModal(); });
+$('about-close').addEventListener('click', () => $('about').close());
+$('about').addEventListener('click', (e) => { // a click on the backdrop, outside the box, closes it
+  const r = $('about').getBoundingClientRect();
+  if (e.target === $('about') && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $('about').close();
+});
 
 // Section buttons (mate mode only).
 for (const [k, sec] of Object.entries(SECTIONS)) {
@@ -1734,6 +2023,7 @@ $('flip').addEventListener('click', flip);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if ($('about').open) return; // the About dialog is on top of the board
   // ←/→ step through the moves, ↑/Home and ↓/End jump to the start and end,
   // Shift+←/→ change puzzle. Arrows don't press buttons, so they work with one focused.
   const arrows = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -Infinity, ArrowDown: Infinity, Home: -Infinity, End: Infinity };
