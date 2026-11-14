@@ -441,7 +441,15 @@ button.flip[aria-pressed="true"] { color: var(--accent); border-color: var(--acc
   .browser-list button { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
   .browser-list .meta { grid-column: 1 / -1; grid-row: 2; }
   .info { flex-wrap: wrap; }  /* long problem names: title on its own line, buttons below */
-  .info > div:first-child { flex: 1 1 100%; }
+  .info > div:first-child { flex: 1 1 100%; min-width: 0; }
+  /* No "White to move": the turn dot says it, at the right end of the button row. The game info
+     stays on one line: the time control and "(Black)" whole, the player names cut short. */
+  .subtitle .stm { display: none; }
+  .subtitle > :not(.stm) { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+  .subtitle .tc, .subtitle .nowrap { flex: none; }
+  .subtitle .players { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+  .info-side { flex: 1 1 100%; }
+  .info-side .turn { margin-left: auto; }
 }
 .browser-list .meta { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-list .st { font-size: 0.8rem; }

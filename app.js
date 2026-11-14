@@ -629,7 +629,9 @@ function loadPuzzle(i) {
   $('repeat').setAttribute('aria-label', repText);
   const tc = puzzle.timeControl ? fmtTimeControl(puzzle.timeControl) : '';
   const sub = $('subtitle');
-  sub.textContent = `${side(player)} to move`;
+  // "White to move" and its separator are hidden on phones (styles.css): the turn dot says it.
+  const stm = (text) => Object.assign(document.createElement('span'), { className: 'stm', textContent: text });
+  sub.replaceChildren(stm(`${side(player)} to move`));
   // Time control and players; with a source game it's all one link to it, in a new tab.
   const gameEl = document.createElement(puzzle.link ? 'a' : 'span');
   if (puzzle.link) {
@@ -649,8 +651,12 @@ function loadPuzzle(i) {
     if (tc && tc !== 'daily') tcEl.append(icon ? tc : ` ${tc}`);
     gameEl.append(tcEl);
   }
+  // Players in their own span: on phones that's what gets cut short, never the time control.
   if (puzzle.white && puzzle.black) {
-    gameEl.append(`${gameEl.childNodes.length ? ' · ' : ''}${puzzle.white} (White) vs ${puzzle.black} `);
+    const players = document.createElement('span');
+    players.className = 'players';
+    players.textContent = `${gameEl.childNodes.length ? ' · ' : ''}${puzzle.white} (White) vs ${puzzle.black} `;
+    gameEl.append(players);
   }
   // The last word and the icon don't break apart.
   const tail = document.createElement('span');
@@ -658,7 +664,7 @@ function loadPuzzle(i) {
   if (puzzle.white && puzzle.black) tail.append('(Black)');
   if (puzzle.link) tail.insertAdjacentHTML('beforeend', EXTERNAL_ICON);
   if (tail.childNodes.length) gameEl.append(tail);
-  if (gameEl.childNodes.length) sub.append(' · ', gameEl);
+  if (gameEl.childNodes.length) sub.append(stm(' · '), gameEl);
   $('turn').className = `turn ${player}`;
   $('turn').title = `${side(player)} to move`;
   setCue(startCue());
@@ -1866,8 +1872,10 @@ function setMode(m) {
   if (busy || !MODES[m]) return;
   mode = m;
   try { localStorage.setItem(MODE_KEY, m); } catch {}
-  $('app-title').textContent = MODES[m].title;
-  document.title = `${MODES[m].title} · ChessHub`;
+  // Review is titled by its section: "Review: Puzzles", "Review: Nuanced", "Review: Openings".
+  const title = m === 'review' ? `Review: ${REVIEW_SECTIONS[rsection].label}` : MODES[m].title;
+  $('app-title').textContent = title;
+  document.title = `${title} · ChessHub`;
   for (const k of Object.keys(MODES)) {
     if (m === k) $(`mode-${k}`).setAttribute('aria-current', 'page');
     else $(`mode-${k}`).removeAttribute('aria-current');
