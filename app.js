@@ -897,11 +897,10 @@ function showAlts(mine) {
     });
     list.append(b);
   }
-  $('alts-note').textContent = alts.length === 1
-    ? 'Only one move counts here.'
-    : `Every move within ${STRATEGY_OK}cp of the engine's best counts. Click one to play out its line: `
-      + "the engine's move from the mined analysis, the others from Stockfish in your browser.";
-  box.hidden = !alts.length;
+  $('alts-note').textContent = `Every move within ${STRATEGY_OK}cp of the engine's best counts. Click one to play out its line: `
+    + "the engine's move from the mined analysis, the others from Stockfish in your browser.";
+  // Hidden when only one move counts: there is nothing "other" to show.
+  box.hidden = alts.length < 2;
   syncResult();
 }
 
